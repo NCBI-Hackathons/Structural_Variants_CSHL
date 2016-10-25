@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # python 2.7
 
-# USAGE: average_coverages.py data/depth_file.txt
+# USAGE: average_coverages.py data/depth_file.txt > output_file
 
 # DESCRIPTION:
 # This script will read in a coverage file and output the average coverage
