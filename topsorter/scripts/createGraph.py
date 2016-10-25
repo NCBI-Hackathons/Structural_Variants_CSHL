@@ -8,12 +8,17 @@
 ## ----------------------
 
 from __future__ import print_function
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 from io import open
 import os
 import sys
 import argparse
 import vcf
 import collections
+import networkx as nx
+import uuid
 
 
 # the class for the data structure
@@ -54,6 +59,7 @@ class parseVcf:
             vcf_writer = vcf.Writer(open(self.in_vcf + ".large_sv.vcf", 'w'), self.vcf_reader)
         for record in self.large_variants:
             vcf_writer.write_record(record)
+
         # export the flanking regions as a bed file
         bed_str = ""
         for var in self.large_variants:
@@ -63,6 +69,7 @@ class parseVcf:
             right = chr + "\t" + str(int(var.INFO['END'])-1001) + "\t" + str(int(var.INFO['END'])-1) + "\t" + var.ID + ",right\n"
             after = chr + "\t" + str(int(var.INFO['END'])-1) + "\t" + str(int(var.INFO['END'])+999) + "\t" + var.ID + ",after\n"
             bed_str += before + left + right + after
+
         # write to local
         bed_out = open(self.in_vcf + ".bed", "w")
         bed_out.write(bed_str)
@@ -72,8 +79,7 @@ class parseVcf:
         self.large_variants = sorted(self.large_variants, key=lambda x: x.POS)
 
         # scan the chromosomes and split by variants
-        # nodes = []
-        graph = collections.defaultdict(list)
+        self.graph = collections.defaultdict(list)
         for chr in self.chr_sizes.keys():
             i = 0
             for variant in self.large_variants:
@@ -90,29 +96,50 @@ class parseVcf:
                     curr_node.start, curr_node.end = variant.POS-1, variant.INFO['END']-1
                     # link the prev to curr node
                     prev_node.next.append(curr_node)
-                    graph[chr].extend([prev_node, curr_node])
+                    self.graph[chr].extend([prev_node, curr_node])
                     i = variant.INFO['END']
-            if graph[chr] != []:
-                graph[chr][-1].next = [None]
+            if self.graph[chr] != []:
+                self.graph[chr][-1].next = [None]
 
         #for chr in graph.keys():
         #    for i in graph[chr]:
         #        if i.next is not None:
         #            print (i.chr, i.start, i.end, i.next[0])
 
-        '''
-        if self.zyg == "both":
-            for record in self.vcf_reader:
-                if (record.INFO['MINCOV'] >= self.mc) & (record.INFO['ALTCOV'] >= self.ac) & (record.INFO['COVRATIO'] >= self.cr) & (record.INFO['CHI2'] <= self.chi2) & (record.INFO['FISHERPHREDSCORE'] >= self.fp):
-                    self.sub_vcf.append(record)
-            return(self.sub_vcf)
+    def weightedDag(self):
+        DG=nx.DiGraph()
+        example = self.graph["chr20"]
+        for i in range(len(example)-1):
+            DG.add_edge(example[i], example[i+1])
+        # DG.add_weighted_edges_from([("A","B", 10000), ("B","C",0.75)])
+        # topological sorting
+        print ("[execute]\tPerforming topological sorting", flush=True)
+        order = nx.topological_sort(DG)
+        print ("[status]\tOrder of the nodes after topological sorting: ", flush=True)
+        print (order)
 
-        else:
-            for record in self.vcf_reader:
-                if (record.INFO['ZYG'] == self.zyg) & (record.INFO['MINCOV'] >= self.mc) & (record.INFO['ALTCOV'] >= self.ac) & (record.INFO['COVRATIO'] >= self.cr) & (record.INFO['CHI2'] <= self.chi2) & (record.INFO['FISHERPHREDSCORE'] >= self.fp):
-                    self.sub_vcf.append(record)
-            return(self.sub_vcf)
-        '''
+        # build a tree
+        start = order[0]
+        nodes = [order[0]] # start with first node in topological order
+        labels = {}
+        print ("[status]\tEdges:")
+        tree = nx.Graph()
+        while nodes:
+            source = nodes.pop()
+            labels[source] = source
+            for target in DG.neighbors(source):
+                if target in tree:
+                    t = uuid.uuid1() # new unique id
+                else:
+                    t = target
+                labels[t] = target
+                tree.add_edge(source,t)
+                print (source, target, source, t)
+                nodes.append(target)
+        plt.figure()
+        nx.draw(tree)# ,labels=labels)
+        plt.gcf()
+        plt.savefig("test.pdf")
 
     # write function for exporting vcf files
     def parse(self):
@@ -126,7 +153,7 @@ class parseVcf:
 
 # the main process
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='single-vcf-filter.py - a script for filtering Scalpel single sample vcf')
+    parser = argparse.ArgumentParser(description='createGraph.py - a script for constructing a graph from a vcf file')
     parser.add_argument("-i", help="input vcf file [REQUIRED]",required=True)
 
     # check if there is any argument
@@ -138,15 +165,16 @@ if __name__ == '__main__':
         args = parser.parse_args()
 
     # process the file if the input files exist
-    if (args.i!=None): # & (args.o!=None):
-        worker = parseVcf(args.i) #, int(args.mc), int(args.ac), str(args.zyg), float(args.cr), float(args.chi), float(args.fp), args.o )
-        print("[status]\tReading the vcf file" + str(args.i), flush=True)
+    if (args.i!=None):
+        worker = parseVcf(args.i)
+        print("[status]\tReading the vcf file: " + str(args.i), flush=True)
         worker.readVcf()
         print("[execute]\tExporting the large SVs to vcf and flanking regions to a bed file", flush=True)
         worker.exportVcfBed()
-        print("[execute]\tConstructing the graph", flush=True)
+        print("[execute]\tCreating the nodes", flush=True)
         worker.createNodes()
-        # vcf.parse()
+        print("[execute]\tConstructing the graph", flush=True)
+        worker.weightedDag()
 
     # print usage message if any argument is missing
     else:
