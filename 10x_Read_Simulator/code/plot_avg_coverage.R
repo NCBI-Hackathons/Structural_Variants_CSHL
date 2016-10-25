@@ -30,16 +30,15 @@ coverage_df <- reshape2::melt(coverage_df, id.vars = "chrom", value.name = "avg_
 # fix chrom order for plot
 coverage_df <- coverage_df[with(coverage_df, order(chrom)), ]
 
-coverage_df
 
 # make horizontal stacked grouped barplot
 # plot by chrom
-pdf(file = file.path(outdir, "avg_cov_byChrom.pdf"), height = 8, width = 8)
-ggplot(coverage_df, aes(x = chrom, y = avg_coverage, fill = factor(sample))) +
-  geom_bar(stat="identity", position="dodge") + # remove 'position' for stacked plot
-    coord_flip() + 
-    labs(title="Average Coverage Per Chromosome\nPer Samples", x="Chromosome", y = "Average Coverage")
-dev.off()
+# pdf(file = file.path(outdir, "avg_cov_byChrom.pdf"), height = 8, width = 8)
+# ggplot(coverage_df, aes(x = chrom, y = avg_coverage, fill = factor(sample))) +
+#   geom_bar(stat="identity", position="dodge") + # remove 'position' for stacked plot
+#     coord_flip() + 
+#     labs(title="Average Coverage Per Chromosome\nPer Samples", x="Chromosome", y = "Average Coverage")
+# dev.off()
 
 # plot by genome
 pdf(file = file.path(outdir, "avg_cov_byGenome.pdf"), height = 8, width = 8)
