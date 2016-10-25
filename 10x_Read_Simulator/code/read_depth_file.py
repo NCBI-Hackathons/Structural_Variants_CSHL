@@ -3,20 +3,29 @@
 
 import sys
 import csv
-import gzip 
 import collections
-# with gzip.open('/home/devsci5/depth13Genome.depth.gz') as gzfile:
-    # for line in gzfile:
 
-# for line in sys.stdin:
-#     print line,
-# input_file = "/home/devsci4/data/depth13Genome.depth.txt"
-# input_file = sys.stdin
 input_file = sys.argv[1]
 print input_file
 # sys.exit()
 
+
+def get_num_cols(infile):
+    # get the number of columns in the file
+    with open(infile) as file:
+        reader = csv.reader(file, delimiter='\t')
+        first_row = next(reader)
+        num_cols = len(first_row)
+    return num_cols
+
+# number of genomes in depth file 
+num_genomes = get_num_cols(input_file) - 2
+print "Number of genomes", num_genomes
+
+
 def get_avg_coverage(infile):
+    # get the average coverage per genome in the file
+    # num_genomes = get_num_cols(infile) - 2
     total_coverage = 0 
     line_count = 0
     # calculate the average coverage for a column in the file
@@ -72,32 +81,49 @@ def get_binned_stats(infile, avg_coverage):
 
 postion_stats = get_binned_stats(infile = input_file, avg_coverage = avg_coverage)
 
-for line in postion_stats:
-    print('\t'.join(map(str,line)))
+# for line in postion_stats:
+#     print('\t'.join(map(str,line)))
 
 
 
-# get average coverage per chromosome
-def get_chrom_coverage(infile):
-    total_coverage = 0 
-    line_count = 0
-    chrom_coverage_dict = collections.defaultdict(int)
-    chrom_count_dict = collections.defaultdict(int)
-    # calculate the total coverage per chromosome
+
+def genome_avg_coverages(infile):
+    # get average coverage per chromosome per genome
+    # EXAMPLE:
+    # {genome1: {chr1: 10000, chr2:5000}, genome2:etc.}
+    # ~~~~~ # 
+    # get the number of genomes in the file
+    num_genomes = get_num_cols(infile) - 2
+    # dict to hold total coverage for each genome
+    genome_coverages = collections.defaultdict(dict)
+    # dict to hold total number entries for each genome
+    genome_counts = collections.defaultdict(dict)
+    # dict to hold average coverage for each genome
+    genome_average_coverages = collections.defaultdict(dict)
+    for i in range(1, num_genomes + 1):
+        genome_coverages[str(i)] = collections.defaultdict(int)
+        genome_counts [str(i)] = collections.defaultdict(int)
+        genome_average_coverages [str(i)] = collections.defaultdict(int)
+    # calculate the total coverages
     with open(infile) as tsvin:
         tsvin = csv.reader(tsvin, delimiter='\t')
         for line in tsvin:
-            line_count += 1
-            chrom = line[0]
-            coverage = line[2]
-            chrom_coverage_dict[chrom] += int(coverage)
-            chrom_count_dict[chrom] += 1
-    # calculate the average coverage per chromosome
-    for key in chrom_coverage_dict.iterkeys():
-        chrom_coverage_dict[key] = chrom_coverage_dict[key] / chrom_count_dict[key]
-    return chrom_coverage_dict
-
-chrom_coverage_dict = get_chrom_coverage(input_file)
-print chrom_coverage_dict.keys()
-print chrom_coverage_dict.values()
-
+            print line
+            chrom = line.pop(0)
+            position = line.pop(0)
+            for i in range(1, len(line) + 1):
+                print i - 1 
+                print line[i - 1]
+                genome_counts[str(i)][chrom] += 1
+                genome_coverages[str(i)][chrom] += int(line[i - 1])
+    # print genome_counts.keys()
+    # print genome_coverages.keys()
+    # calculate the average coverages
+    for genome in genome_counts.iterkeys():
+        for chrom in genome_counts[genome].iterkeys():
+            genome_average_coverages[genome][chrom] = genome_coverages[genome][chrom] / genome_counts[genome][chrom]
+    # print the results
+    for genome in genome_average_coverages.iterkeys():
+        for chrom in genome_average_coverages[genome].iterkeys():
+            print chrom, '\t', genome_average_coverages[genome][chrom]
+genome_avg_coverages(input_file)
