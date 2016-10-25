@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 ## ----------------------
-# A python module for creating a graph from parsed VCF files
+# Topsorter
 ## ----------------------
 # Han Fang (hanfang.cshl@gmail.com)
 # Cold Spring Harbor Laboratory
@@ -45,7 +45,7 @@ class parseVcf:
 
         # [temp] filter out variants without END
         for variant in self.vcf_reader:
-            if 'END' in variant.INFO:
+            if 'END' in variant.INFO and variant.INFO['SVTYPE'] in ("DEL", "DUP", "INV"):
                 if abs(variant.INFO['END'] - variant.POS) > 10000:
                     self.large_variants.append(variant)
 
@@ -80,44 +80,62 @@ class parseVcf:
 
         # scan the chromosomes and split by variants
         self.graph = collections.defaultdict(list)
+        last_pos = collections.defaultdict(int)
         for chr in self.chr_sizes.keys():
             i = 0
             for variant in self.large_variants:
                 if variant.CHROM == chr:
-                    # nodes for left of SV
-                    prev_val = (variant.CHROM, i, variant.POS-2, "prev")
-                    prev_node = TreeNode(prev_val)
-                    prev_node.start, prev_node.end = i, variant.POS-2
-                    if i != 0:
-                        curr_node.next.append(prev_node)
-                    # current SV node
-                    curr_val = (variant.CHROM, variant.POS-1, variant.INFO['END']-1, "curr")
-                    curr_node = TreeNode(curr_val)
-                    curr_node.start, curr_node.end = variant.POS-1, variant.INFO['END']-1
-                    # link the prev to curr node
-                    prev_node.next.append(curr_node)
-                    self.graph[chr].extend([prev_node, curr_node])
-                    i = variant.INFO['END']
-            if self.graph[chr] != []:
-                self.graph[chr][-1].next = [None]
+                    # add ref node
+                    ref_node = (variant.CHROM, i, variant.POS-1, "REF")
+                    self.graph[chr].append(ref_node)
+                    # add variant node
+                    var_node = (variant.CHROM, variant.POS-1, variant.INFO['END']-1, variant.INFO['SVTYPE'])
+                    self.graph[chr].append(var_node)
+                    i = variant.INFO['END']-1
+                    last_pos[chr] = i # keep track of the last pos
+        # add the last node
+        for chr in self.chr_sizes.keys():
+            last_node = (chr, last_pos[chr], self.chr_sizes[chr]-1, "REF")
+            self.graph[chr].append(last_node)
 
-        #for chr in graph.keys():
-        #    for i in graph[chr]:
-        #        if i.next is not None:
-        #            print (i.chr, i.start, i.end, i.next[0])
+        '''
+        # nodes for left of SV
+        prev_val = (variant.CHROM, i, variant.POS-2, "prev")
+        prev_node = TreeNode(prev_val)
+        prev_node.start, prev_node.end = i, variant.POS-2
+        if i != 0:
+            curr_node.next.append(prev_node)
+        # current SV node
+        curr_val = (variant.CHROM, variant.POS-1, variant.INFO['END']-1, "curr")
+        curr_node = TreeNode(curr_val)
+        curr_node.start, curr_node.end = variant.POS-1, variant.INFO['END']-1
+        # link the prev to curr node
+        prev_node.next.append(curr_node)
+        self.graph[chr].extend([prev_node, curr_node])
+        i = variant.INFO['END']
+        if self.graph[chr] != []:
+           self.graph[chr][-1].next = [None]
+        '''
 
-    def weightedDag(self):
-        DG=nx.DiGraph()
+    def weightedDAG(self):
+        DAG = nx.DiGraph()
+        chroms = self.graph.keys()
+        # add nodes
         example = self.graph["chr20"]
+        print(example)
+        DAG.add_nodes_from(example)
+        # add edges
         for i in range(len(example)-1):
-            DG.add_edge(example[i], example[i+1])
-        # DG.add_weighted_edges_from([("A","B", 10000), ("B","C",0.75)])
+            DAG.add_edge(example[i], example[i+1], weight=1)
+        # print(DAG.out_edges())
+        # print(DAG)
+
         # topological sorting
         print ("[execute]\tPerforming topological sorting", flush=True)
-        order = nx.topological_sort(DG)
+        order = nx.topological_sort(DAG)
         print ("[status]\tOrder of the nodes after topological sorting: ", flush=True)
         print (order)
-
+        '''
         # build a tree
         start = order[0]
         nodes = [order[0]] # start with first node in topological order
@@ -140,6 +158,11 @@ class parseVcf:
         nx.draw(tree)# ,labels=labels)
         plt.gcf()
         plt.savefig("test.pdf")
+        '''
+        plt.figure()
+        nx.draw_spectral(DAG) # ,labels=labels)
+        plt.gcf()
+        plt.savefig("test2.pdf")
 
     # write function for exporting vcf files
     def parse(self):
@@ -174,7 +197,7 @@ if __name__ == '__main__':
         print("[execute]\tCreating the nodes", flush=True)
         worker.createNodes()
         print("[execute]\tConstructing the graph", flush=True)
-        worker.weightedDag()
+        worker.weightedDAG()
 
     # print usage message if any argument is missing
     else:
