@@ -22,7 +22,7 @@
 # chr2	36	40	83	105	46	117	47	48	40	49	103	71	47
 # chr1	599	587	680	683	619	689	597	615	588	631	678	701	634
 
-
+from __future__ import division
 import sys
 import csv
 import collections
@@ -51,9 +51,9 @@ def genome_avg_coverages(infile):
     # dict to hold average coverage for each genome
     genome_average_coverages = collections.defaultdict(dict)
     for i in range(1, num_genomes + 1):
-        genome_coverages[str(i)] = collections.defaultdict(int)
-        genome_counts [str(i)] = collections.defaultdict(int)
-        genome_average_coverages [str(i)] = collections.defaultdict(int)
+        genome_coverages[i] = collections.defaultdict(int)
+        genome_counts[i] = collections.defaultdict(int)
+        genome_average_coverages[i] = collections.defaultdict(int)
     # calculate the total coverages
     with open(infile) as tsvin:
         tsvin = csv.reader(tsvin, delimiter='\t')
@@ -61,18 +61,17 @@ def genome_avg_coverages(infile):
             chrom = line.pop(0)
             position = line.pop(0)
             for i in range(1, len(line) + 1):
-                genome_counts[str(i)][chrom] += 1
-                genome_coverages[str(i)][chrom] += int(line[i - 1])
+                genome_counts[i][chrom] += 1
+                genome_coverages[i][chrom] += int(line[i - 1])
     # calculate the averages
     for genome in genome_counts.iterkeys():
         for chrom in genome_counts[genome].iterkeys():
             genome_average_coverages[genome][chrom] = genome_coverages[genome][chrom] / genome_counts[genome][chrom]
-    # format the results for printing to stdout
+    # format for printing to stdout; need to keep columns & entries in order !!
     chrom_output = collections.defaultdict(list)
-    for genome in genome_average_coverages.iterkeys():
-        for chrom in genome_average_coverages[genome].iterkeys():
+    for genome in sorted(genome_average_coverages.keys()):
+        for chrom in sorted(genome_average_coverages[genome].keys()):
             chrom_output[chrom].append(genome_average_coverages[genome][chrom])
-    # print the formatted output
-    for chrom in chrom_output.iterkeys():
+    for chrom in sorted(chrom_output.keys()):
         print chrom + '\t' + '\t'.join(map(str,chrom_output[chrom]))
 genome_avg_coverages(input_file)
