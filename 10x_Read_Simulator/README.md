@@ -11,7 +11,7 @@ code/plot_avg_coverage.R sample_output/depth13Genome.depth.summary2.averages.txt
 
 Example output
 
-!()[sample_output/avg_cov_byGenome.png]
+![](sample_output/avg_cov_byGenome.png)
 
 # Dependencies
 
