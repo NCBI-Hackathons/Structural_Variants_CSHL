@@ -13,6 +13,7 @@ import os
 import sys
 import argparse
 import vcf
+import collections
 
 
 # the class for the data structure
@@ -54,35 +55,50 @@ class parseVcf:
         for record in self.large_variants:
             vcf_writer.write_record(record)
         # export the flanking regions as a bed file
+        bed_str = ""
+        for var in self.large_variants:
+            chr = var.CHROM
+            before = chr + "\t" + str(int(var.POS)-1001) + "\t" + str(int(var.POS)-1) + "\t" + var.ID + ",before\n"
+            left = chr + "\t" + str(int(var.POS)-1) + "\t" + str(int(var.POS)+999) + "\t" + var.ID + ",left\n"
+            right = chr + "\t" + str(int(var.INFO['END'])-1001) + "\t" + str(int(var.INFO['END'])-1) + "\t" + var.ID + ",right\n"
+            after = chr + "\t" + str(int(var.INFO['END'])-1) + "\t" + str(int(var.INFO['END'])+999) + "\t" + var.ID + ",after\n"
+            bed_str += before + left + right + after
+        # write to local
+        bed_out = open(self.in_vcf + ".bed", "w")
+        bed_out.write(bed_str)
 
     def createNodes(self):
         # sort the variants by start coordinates
         self.large_variants = sorted(self.large_variants, key=lambda x: x.POS)
 
         # scan the chromosomes and split by variants
-        nodes = []
+        # nodes = []
+        graph = collections.defaultdict(list)
         for chr in self.chr_sizes.keys():
             i = 0
             for variant in self.large_variants:
                 if variant.CHROM == chr:
                     # nodes for left of SV
-                    prev_node = TreeNode(chr)
+                    prev_val = (variant.CHROM, i, variant.POS-2, "prev")
+                    prev_node = TreeNode(prev_val)
                     prev_node.start, prev_node.end = i, variant.POS-2
                     if i != 0:
                         curr_node.next.append(prev_node)
                     # current SV node
-                    curr_node = TreeNode(chr)
+                    curr_val = (variant.CHROM, variant.POS-1, variant.INFO['END']-1, "curr")
+                    curr_node = TreeNode(curr_val)
                     curr_node.start, curr_node.end = variant.POS-1, variant.INFO['END']-1
                     # link the prev to curr node
                     prev_node.next.append(curr_node)
-                    nodes.extend([prev_node, curr_node])
+                    graph[chr].extend([prev_node, curr_node])
                     i = variant.INFO['END']
-            if nodes != []:
-                nodes[-1].next = [None]
+            if graph[chr] != []:
+                graph[chr][-1].next = [None]
 
-        for i in nodes:
-            if i.next is not None:
-                print (i.chr, i.start, i.end, i.next[0])
+        #for chr in graph.keys():
+        #    for i in graph[chr]:
+        #        if i.next is not None:
+        #            print (i.chr, i.start, i.end, i.next[0])
 
         '''
         if self.zyg == "both":
@@ -124,8 +140,11 @@ if __name__ == '__main__':
     # process the file if the input files exist
     if (args.i!=None): # & (args.o!=None):
         worker = parseVcf(args.i) #, int(args.mc), int(args.ac), str(args.zyg), float(args.cr), float(args.chi), float(args.fp), args.o )
+        print("[status]\tReading the vcf file" + str(args.i), flush=True)
         worker.readVcf()
+        print("[execute]\tExporting the large SVs to vcf and flanking regions to a bed file", flush=True)
         worker.exportVcfBed()
+        print("[execute]\tConstructing the graph", flush=True)
         worker.createNodes()
         # vcf.parse()
 
