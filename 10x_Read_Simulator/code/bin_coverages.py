@@ -19,6 +19,7 @@
 # <chrom>\t<position>\t<coverage1>\t<coverage2>...<coverage_n>
 
 # EXAMPLE OUTPUT:
+# # <chrom>\t<start-stop>\t<avg-1,std_dev-1>\t<avg-2,std_dev-2>...<avg-n,std_dev-n>
 
 import sys
 import csv
@@ -43,10 +44,15 @@ def test_bins(value, start_bin, end_bin):
 
 def bin_file_regions(input_file, bin_size):
     # ~~ SETUP ~~~ # 
-    # dict to hold the coverage values
-    chrom_bins = collections.defaultdict(lambda : collections.defaultdict(list))
-    # keep track of bin counts while parsing file
+    # track of bin counts while parsing file
+    # n, s0
     chrom_bin_counts = collections.defaultdict(lambda : collections.defaultdict(int))
+    # hold the coverage values per bin
+    # sum(x), s1
+    chrom_total_coverage = collections.defaultdict(lambda : collections.defaultdict(list))
+    # hold the sum of squares of coverage for each genome
+    # sum(x*x), s2
+    chrom_SS_coverage = collections.defaultdict(lambda : collections.defaultdict(list))
     # ~~~ READ FILE ~~ # 
     with open(input_file) as tsvin:
         tsvin = csv.reader(tsvin, delimiter='\t')
@@ -55,17 +61,24 @@ def bin_file_regions(input_file, bin_size):
             position = line.pop(0)
             # convert remaining values to int
             line = map(int, line)
+            ss_line = [x*x for x in line]
+            # ~~~ BIN REGION ~~ # 
             # set position bins
             position_start_bin, position_end_bin = make_bin_region(position, bin_size)
             position_bin = str(position_start_bin) + '-' + str(position_end_bin)
+            # ~~~ TABULTATE ~~ # 
             # sanity check - make sure we don't add too many entries to the bin
             chrom_bin_counts[chrom][position_bin] += 1 
             if chrom_bin_counts[chrom][position_bin] <= bin_size:
-                if not chrom_bins[chrom][position_bin]:
-                    chrom_bins[chrom][position_bin] = line
+                if not chrom_total_coverage[chrom][position_bin]:
+                    chrom_total_coverage[chrom][position_bin] = line
                 else :
-                    chrom_bins[chrom][position_bin] = [x + y for x, y in zip(chrom_bins[chrom][position_bin], line)]
-                    # chrom_bins[chrom][position_bin] = [sum(x) for x in zip(*chrom_bins[chrom][position_bin])]
+                    chrom_total_coverage[chrom][position_bin] = [x + y for x, y in zip(chrom_total_coverage[chrom][position_bin], line)]
+                    # chrom_total_coverage[chrom][position_bin] = [sum(x) for x in zip(*chrom_total_coverage[chrom][position_bin])]
+                if not chrom_SS_coverage[chrom][position_bin]:
+                    chrom_SS_coverage[chrom][position_bin] = ss_line
+                else :
+                    chrom_SS_coverage[chrom][position_bin] = [x + y for x, y in zip(chrom_SS_coverage[chrom][position_bin], ss_line)]
             else :
                 print 'ERROR: bin exceeded!'
                 print chrom, position, position_bin, chrom_bin_counts[chrom][position_bin]
@@ -78,13 +91,38 @@ def bin_file_regions(input_file, bin_size):
             # test_bins(position, position_starthalf_bin, position_endhalf_bin)
             # ~~~~~~ # # ~~~~~~ # # ~~~~~~ # 
             # print chrom, position, position_bin 
-        return chrom_bins
+        # ~~~ STATS ~~ # 
+        # ~~~ REFORMAT ~~ # 
+        # format for printing to stdout; need to keep columns & entries in order !!
+        chrom_output = collections.defaultdict(list)
+        for chrom in sorted(chrom_total_coverage.keys()):
+            for position_bin in sorted(chrom_total_coverage[chrom].keys())
+                stats_tup = (chrom_total_coverage[chrom], chrom_SS_coverage[chrom])
+            # print stats_tup 
+            chrom_output[chrom].append(stats_tup)
+        # return chrom_total_coverage, chrom_SS_coverage
+        return chrom_output
 
 input_file = sys.argv[1]
 bin_size = 1000
 
 if __name__ == '__main__':
-    chrom_bins = bin_file_regions(input_file, bin_size)
-    for chrom, statsdict in chrom_bins.iteritems():
-        for region, values in statsdict.iteritems():
-            print chrom + '\t' + '\t'.join(map(str,region.split('-'))) + '\t'.join(map(str,values))
+    chrom_output = bin_file_regions(input_file, bin_size)
+    # print chrom_output.keys()
+    for chrom in sorted(chrom_output.keys()):
+        chrom_stats = chrom_output[chrom]
+        # print chrom_stats
+        for i in chrom_stats:
+            print [x for x in i]
+        # print chrom + '\t' + '\t'.join(map(str,chrom_stats))
+        # print chrom + '\t' + '\t'.join(map(str,["%s,%s" % (av, sd) for av, sd in chrom_stats]))
+    # chrom_total_coverage, chrom_SS_coverage = bin_file_regions(input_file, bin_size)
+    # for chrom, statsdict in chrom_total_coverage.iteritems():
+    #     for region, values in statsdict.iteritems():
+    #         print chrom + '\t' + '\t'.join(map(str,region.split('-'))) + '\t'.join(map(str,values))
+    #         # print chrom + '\t' + '\t'.join(map(str,["%s,%s" % (av, sd) for av, sd in chrom_stats]))
+    # print ''
+    # print ''
+    # for chrom, statsdict in chrom_SS_coverage.iteritems():
+    #     for region, values in statsdict.iteritems():
+    #         print chrom + '\t' + '\t'.join(map(str,region.split('-'))) + '\t'.join(map(str,values))

@@ -6,6 +6,9 @@
 # DESCRIPTION:
 # This script will plot the binned coverage data
 
+# ! ! update with ggplot2 ribbon plot http://docs.ggplot2.org/current/geom_ribbon.html
+# plot avg +/- sd
+
 library("reshape2")
 library("ggplot2")
 
