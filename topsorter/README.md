@@ -6,6 +6,8 @@
 - Srividya Ramakrishnan (srividya.ramki@gmail.com)
 - Fritz Sedlazeck (fritz.sedlazeck@gmail.com)
 
+--------
+
 ### Topsorter
 
 #### Traversing & finding the longest path (most confident haplotype) in a weighted directed acyclic graph (DAG).
@@ -16,7 +18,7 @@
 - Output: PDF files of graphs for each chromosme, longest paths
 - Command: `python topsorter.py $vcf ` 
 
-####  
+-------- 
 
 ### barcode_profiling.py
 
