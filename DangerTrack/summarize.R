@@ -45,6 +45,11 @@ png("dist.n.png", res = 200, width = 8, height = 5, units = "in")
 ggplot(combined_summary, aes(N_fraction)) + geom_freqpoly(binwidth=0.01, size=2)
 dev.off()
 
+png("dist.GIAB_H002_events.png", res = 200, width = 8, height = 5, units = "in")
+ggplot(combined_summary, aes(GIAB_H002_events)) + geom_freqpoly(binwidth = 1, size = 2) +
+scale_y_log10(labels = scales::comma)
+dev.off()
+
 # boxplot of mapability versus number break points
 png("map-breaks.box.png", res = 200, width = 8, height = 5, units = "in")
 ggplot(subset(combined_summary, GIAB_H002_events < 21),
@@ -99,32 +104,41 @@ dev.off()
 ####################
 
 
-# calculate score
+# calculate scores
 
 scores = combined_summary
 scores[,"chr"] = sub("(.*):.*-.*", "\\1",  scores[,"#BIN"])
 scores[,"start_pos"] = as.integer(sub(".*:(.*)-.*", "\\1",  scores[,"#BIN"]))
 scores[,"end_pos"] = as.integer(sub(".*:.*-(.*)", "\\1",  scores[,"#BIN"]))
 
-scores[,"map_score"] = 1 - scores[,"Mapability50mer"]
-scores[,"breaks_score"] = scores[,"GIAB_H002_events"] / max(scores[,"GIAB_H002_events"])
+# calculate percentiles after filtering out bins with 0 events
+percentiles = quantile(subset(combined_summary, GIAB_H002_events > 0)[,"GIAB_H002_events"], c(0.95, 0.99, 0.999, 0.9999))
+percentiles
+breaks_score_cap = percentiles["99%"]
 
+# capped break point events
+scores[,"GIAB_H002_events_capped"] = scores[,"GIAB_H002_events"]
+scores[scores[,"GIAB_H002_events"] > breaks_score_cap,][,"GIAB_H002_events_capped"] = breaks_score_cap
+
+# mapability score
+scores[,"map_score"] = 1 - scores[,"Mapability50mer"]
+
+# break points score
+scores[,"breaks_score"] = scores[,"GIAB_H002_events_capped"] / max(scores[,"GIAB_H002_events_capped"])
+
+# DangerScore
 scores[,"dangerscore"] = scores[,"map_score"] + scores[,"breaks_score"]
 scores[,"dangerscore"] = scores[,"dangerscore"] / 2
 
-# chr3 dangerscore plot
-png("dangerscore.chr3.png", res = 100, width = 15, height = 5, units = "in")
-ggplot(subset(scores, chr == "chr3"), aes(y = dangerscore, x = start_pos)) +
-geom_point(shape = 20, size = 5, alpha = 0.1) +
-scale_x_continuous(labels = scales::comma)
-dev.off()
-
-# chr5 dangerscore plot
-png("dangerscore.chr5.png", res = 100, width = 15, height = 5, units = "in")
-ggplot(subset(scores, chr == "chr5"), aes(y = dangerscore, x = start_pos)) +
-geom_point(shape = 20, size = 5, alpha = 0.1) +
-scale_x_continuous(labels = scales::comma)
-dev.off()
+# dangerscore plots for a few chromosomes
+for (chr_name in c("chr1", "chr2", "chr3", "chr4", "chr5")) {
+  dangerscore_png = paste0("dangerscore.", chr_name, ".png")
+  message("generating plot: ", dangerscore_png)
+  ggplot(subset(scores, chr == chr_name), aes(y = dangerscore, x = start_pos)) +
+  geom_point(shape = 20, size = 3, alpha = 0.1) +
+  scale_x_continuous(labels = scales::comma) +
+  ggsave(filename = dangerscore_png, dpi = 100, width = 15, height = 5, units = "in")
+}
 
 # export BED file
 scores_bed = scores[, c("chr", "start_pos", "end_pos", "#BIN", "dangerscore")]
