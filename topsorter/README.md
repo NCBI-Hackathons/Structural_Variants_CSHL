@@ -1,10 +1,10 @@
 ## README
 ####  
 
-## Contact
-Han Fang (hanfang.cshl@gmail.com)
-Srividya Ramakrishnan (srividya.ramki@gmail.com)
-Fritz Sedlazeck (fritz.sedlazeck@gmail.com)
+### Contact
+- Han Fang (hanfang.cshl@gmail.com)
+- Srividya Ramakrishnan (srividya.ramki@gmail.com)
+- Fritz Sedlazeck (fritz.sedlazeck@gmail.com)
 
 ### Topsorter
 
