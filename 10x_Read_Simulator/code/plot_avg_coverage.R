@@ -9,7 +9,7 @@
 
 library("reshape2")
 library("ggplot2")
-
+library("plotly")
 
 # get commands passed to the script
 args <- commandArgs(TRUE)
@@ -45,6 +45,26 @@ coverage_df <- reshape2::melt(coverage_df, id.vars = c("chrom","sample"), value.
 # fix chrom order for plot
 coverage_df <- coverage_df[with(coverage_df, order(chrom)), ]
 
+
+# plot by genome
+coverage_df_avg <- subset(coverage_df, statistic == "average")
+pdf(file = file.path(outdir, "avg_cov_byGenome.pdf"), height = 8, width = 8)
+chrom_plot <- ggplot(coverage_df_avg, aes(x = sample, y = coverage, fill = factor(chrom)))
+chrom_plot <-chrom_plot + geom_bar(stat="identity", position="dodge")
+chrom_plot <-chrom_plot + coord_flip()
+chrom_plot <-chrom_plot + labs(title="Average Coverage Per Chromosome\nPer Samples", x="Sample", y = "Average Coverage", fill="Chromosome")
+print(chrom_plot)
+dev.off()
+
+
+save.image(file=file.path(outdir, "plot_avg.Rdata"),compress = TRUE)
+# load("plot_avg.Rdata")
+
+# plotly
+chrom_plotly <- ggplotly(chrom_plot)
+htmlwidgets::saveWidget(as.widget(chrom_plotly), file.path(outdir, "avg_cov_byGenome.html"))
+
+
 # coverage_df
 # make horizontal stacked grouped barplot
 # plot by chrom
@@ -54,17 +74,3 @@ coverage_df <- coverage_df[with(coverage_df, order(chrom)), ]
 #     coord_flip() + 
 #     labs(title="Average Coverage Per Chromosome\nPer Samples", x="Chromosome", y = "Average Coverage")
 # dev.off()
-
-# plot by genome
-coverage_df_avg <- subset(coverage_df, statistic == "average")
-pdf(file = file.path(outdir, "avg_cov_byGenome.pdf"), height = 8, width = 8)
-ggplot(coverage_df_avg, aes(x = sample, y = coverage, fill = factor(chrom))) +
-  geom_bar(stat="identity", position="dodge") + 
-    coord_flip() + 
-    # scale_y_continuous(breaks = waiver()) + 
-    # coord_cartesian(ylim=c(0,max(numeric(coverage_df_avg[["coverage"]])))) +
-    labs(title="Average Coverage Per Chromosome\nPer Samples", x="Sample", y = "Average Coverage", fill="Chromosome")
-    # need to fix axis scale markers !
-dev.off()
-save.image(file=file.path(outdir, "plot_avg.Rdata"),compress = TRUE)
-# load("plot_avg.Rdata")

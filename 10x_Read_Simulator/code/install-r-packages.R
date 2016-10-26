@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-package_list<-c("ggplot2", "reshape2")
+package_list<-c("ggplot2", "reshape2", "curl", "httr", "plotly")
 # , "grid", "plyr", "knitr", "VennDiagram", "gridExtra", "datasets", "digest", "Hmisc", "xtable", "reshape2", "data.table", "scales", "corrplot", "RColorBrewer", "lattice", "gplots", "MASS", "stringr", "flsa", "genlasso", "optparse", "pastecs", "plotrix", "zoo", "reshape", "chron","UpSetR", "plotly") 
 
 for(p in package_list){
