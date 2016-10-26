@@ -3,13 +3,13 @@
 
 ### Topsorter
 
-#### Travesing and finding the longest path (most confident haplotype) in a weighted directed acyclic graph (DAG) in Python.
-#### - At the initial construction step, it splits regions of a chromosome by structural variants and creates a weighted DAG.
-#### - Then it updates the weights of the edges according to barcodes information (and/or other quality metrics) from the script barcode_profiles.py.
-#### - Finally Topsorter performs topological sorting of the graph and finds the longest path.
-#### - Input: a vcf file
-#### - Output: PDF files of graphs for each chromosme, longest paths
-#### - Command: `python topsorter.py $vcf ` 
+#### Travresing and finding the longest path (most confident haplotype) in a weighted directed acyclic graph (DAG) in Python.
+- At the initial construction step, it splits regions of a chromosome by structural variants and creates a weighted DAG.
+- Then it updates the weights of the edges according to barcodes information (and/or other quality metrics) from the script barcode_profiles.py.
+- Finally Topsorter performs topological sorting of the graph and finds the longest path.
+- Input: a vcf file
+- Output: PDF files of graphs for each chromosme, longest paths
+- Command: `python topsorter.py $vcf ` 
 
 ### barcode_profiling.py
 
