@@ -17,8 +17,7 @@ code/average_coverages.py data/depth13Genome.depth.summary2_sorted.txt > test_ou
 code/plot_avg_coverage.R test_output/depth13Genome.depth.summary2_sorted.averages.txt test_output/
 
 # get the binned coverage regions
-code/bin_coverages.py data/depth13Genome.depth.summary2_sor
-ted.txt > test_output/depth13Genome.depth.summary2_sorted.bin_total_coverage.txt
+code/bin_coverages.py data/depth13Genome.depth.summary2_sorted.txt > test_output/depth13Genome.depth.summary2_sorted.bin_total_coverage.txt
 
 ```
 
