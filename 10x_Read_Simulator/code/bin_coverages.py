@@ -72,5 +72,4 @@ if __name__ == '__main__':
     chrom_bins = bin_file_regions(input_file, bin_size)
     for chrom, statsdict in chrom_bins.iteritems():
         for region, values in statsdict.iteritems():
-            # print chrom, statstat
             print chrom + '\t' + '\t'.join(map(str,region.split('-'))) + '\t'.join(map(str,values))
