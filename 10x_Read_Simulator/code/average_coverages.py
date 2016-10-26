@@ -72,6 +72,10 @@ def genome_avg_coverages(infile):
     for genome in sorted(genome_average_coverages.keys()):
         for chrom in sorted(genome_average_coverages[genome].keys()):
             chrom_output[chrom].append(genome_average_coverages[genome][chrom])
+    return chrom_output
+
+if __name__ == '__main__':
+    chrom_output = genome_avg_coverages(input_file)
     for chrom in sorted(chrom_output.keys()):
         print chrom + '\t' + '\t'.join(map(str,chrom_output[chrom]))
-genome_avg_coverages(input_file)
+
