@@ -19,7 +19,7 @@ import vcf
 import collections
 import networkx as nx
 import uuid
-
+from networkx.drawing.nx_agraph import graphviz_layout
 
 # the class for the data structure
 class TreeNode(object):
@@ -122,76 +122,77 @@ class topSorter:
            self.graph[chr][-1].next = [None]
         '''
 
-    def weightedDAG(self):
-        DAG = nx.DiGraph()
+    def createWeightedDAG(self):
+        self.DAG = nx.DiGraph()
         chroms = self.graph.keys()
         # add nodes
         n = len(self.graph["chr20"])
-        # print (n)
         example = self.graph["chr20"]
-        # print(example)
-        #for i in example:
-        #    DAG.add_node(i)
-        #DAG.add_nodes_from(example)
-        #print(DAG.nodes())
         # initialize the graph with equal weight
-        for i in range(len(example)-1):
-            DAG.add_node(example[i]) #
-            DAG.add_node(example[i+1]) #
-            DAG.add_edge(example[i], example[i+1], weight=1)
+        for i in range(1, len(example)-1):
+            self.DAG.add_node(example[i-1])
+            self.DAG.add_node(example[i])
+            self.DAG.add_node(example[i+1])
+            self.DAG.add_edge(example[i-1], example[i], weight=1)
+            self.DAG.add_edge(example[i], example[i+1], weight=1)
             if example[i][3] == "DEL":
-                DAG.add_edge(example[i-1], example[i+1], weight=30)
+                self.DAG.add_edge(example[i-1], example[i+1], weight=10)
             elif example[i][3] == "DUP":
                 nodeCopy = (example[i][0], example[i][1], example[i][2], "DUP_COPY")
-                DAG.add_node(nodeCopy)
-                DAG.add_edge(example[i], nodeCopy, weight=1)
-                DAG.add_edge(nodeCopy, example[i+1], weight=1)
+                self.DAG.add_node(nodeCopy)
+                self.DAG.add_edge(example[i], nodeCopy, weight=1)
+                self.DAG.add_edge(nodeCopy, example[i+1], weight=1)
             elif example[i][3] == "INV":
                 nodeInv = (example[i][0], example[i][2], example[i][1], "INV_FLIP")
-                DAG.add_edge(example[i-1], nodeInv, weight=1)
-                DAG.add_edge(nodeInv, example[i+1], weight=1)
-        # print(nx.find_cycle(DAG))# .edges())
-        print(DAG.nodes())
-        print(DAG.edges())
+                self.DAG.add_edge(example[i-1], nodeInv, weight=1)
+                self.DAG.add_edge(nodeInv, example[i+1], weight=1)
 
+    def findLongestPath(self):
         # topological sorting
         print ("[execute]\tPerforming topological sorting", flush=True)
-        order = nx.topological_sort(DAG)
-        print ("[status]\tOrder of the nodes after topological sorting: ", flush=True)
-        print ("[results]\t", order, flush=True)
-        longest = nx.dag_longest_path(DAG)
-        print ("[results]\t Longest\n", longest, flush=True)
-        longestDis = nx.dag_longest_path_length(DAG)
-        print ("[results]\t Longest length: ", longestDis, flush=True)
+        order = nx.topological_sort(self.DAG)
+        print ("[results]\t Topologically sorted order of nodes: \n", order, flush=True)
+        # find the longest path
+        longest_weighted_path = self.longestWeightedPath(self.DAG)
+        print ("[results]\t Longest weighted path\n", longest_weighted_path)
 
-        '''
-        # build a tree
-        start = order[0]
-        nodes = [order[0]] # start with first node in topological order
+        # longest path without weights:
+        # longest = nx.dag_longest_path(self.DAG)
+        # print ("[results]\t Longest\n", longest, flush=True)
+        # longestDis = nx.dag_longest_path_length(self.DAG)
+        # print ("[results]\t Longest length: ", longestDis, flush=True)
+
+    def drawDAG(self):
+        i = 0
         labels = {}
-        print ("[status]\tEdges:")
-        tree = nx.Graph()
-        while nodes:
-            source = nodes.pop()
-            labels[source] = source
-            for target in DAG.neighbors(source):
-                if target in tree:
-                    t = uuid.uuid1() # new unique id
-                else:
-                    t = target
-                labels[t] = target
-                tree.add_edge(source,t)
-                print (source, target, source, t)
-                nodes.append(target)
+        for node in sorted(self.DAG.nodes(), key=lambda x: x[1]):
+            labels[node] = (node[1], node[3])
+            i += 1
+        # edge_labels = {(n1,n2): self.DAG[n1][n2]['weight'] for (n1,n2) in self.DAG.edges()}
+
         plt.figure()
-        nx.draw(tree)# ,labels=labels)
-        plt.gcf()
-        plt.savefig("test.pdf")
-        '''
-        plt.figure()
-        nx.draw(DAG)# ,labels=labels)
+        pos = nx.spring_layout(self.DAG)
+        nx.draw(self.DAG, pos, labels=labels)
+        # nx.draw_networkx(self.DAG, pos, labels=labels)
+        # nx.draw_networkx_edge_labels(self.DAG, pos, edge_labels=edge_labels)
         plt.gcf()
         plt.savefig("test_new.pdf")
+
+    def longestWeightedPath(self, G):
+        dist = {} # stores [node, distance] pair
+        for node in nx.topological_sort(G):
+            # pairs of dist,node for all incoming edges
+            pairs = [(dist[v][0] + G[v][node]['weight'], v) for v in G.pred[node]] # incoming pairs
+            if pairs:
+                dist[node] = max(pairs)
+            else:
+                dist[node] = (0, node)
+        node,(length,_)  = max(dist.items(), key=lambda x:x[1])
+        path = []
+        while length > 0:
+            path.append(node)
+            length,node = dist[node]
+        return list(reversed(path))
 
     # write function for exporting vcf files
     def parse(self):
@@ -226,7 +227,9 @@ if __name__ == '__main__':
         print("[execute]\tCreating the nodes", flush=True)
         worker.createNodes()
         print("[execute]\tConstructing the graph", flush=True)
-        worker.weightedDAG()
+        worker.createWeightedDAG()
+        worker.findLongestPath()
+        worker.drawDAG()
 
     # print usage message if any argument is missing
     else:
