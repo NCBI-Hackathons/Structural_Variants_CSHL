@@ -26,6 +26,7 @@ from __future__ import division
 import sys
 import csv
 import collections
+import math
 
 input_file = sys.argv[1]
 
@@ -42,19 +43,30 @@ def genome_avg_coverages(infile):
     # EXAMPLE:
     # {genome1: {chr1: 10000, chr2:5000}, genome2:etc.}
     # ~~~~~ # 
+    # ~~ SETUP ~~~ # 
     # get the number of genomes in the file
     num_genomes = get_num_cols(infile) - 2
-    # dict to hold total coverage for each genome
-    genome_coverages = collections.defaultdict(dict)
     # dict to hold total number entries for each genome
+    # n, s0
     genome_counts = collections.defaultdict(dict)
+    # dict to hold total coverage for each genome
+    # s1
+    genome_coverages = collections.defaultdict(dict)
+    # dict to hold the sum of squares of coverage for each genome
+    # s2
+    genome_SS_coverages = collections.defaultdict(dict)
     # dict to hold average coverage for each genome
     genome_average_coverages = collections.defaultdict(dict)
+    # dict to hold the std dev of coverage for each genome
+    genome_std_coverages = collections.defaultdict(dict)
+    # initialize defaultdict for every genome in the file
     for i in range(1, num_genomes + 1):
         genome_coverages[i] = collections.defaultdict(int)
         genome_counts[i] = collections.defaultdict(int)
         genome_average_coverages[i] = collections.defaultdict(int)
-    # calculate the total coverages
+        genome_SS_coverages[i] = collections.defaultdict(int)
+    # ~~~ READ FILE ~~ # 
+    # calculate the total & SS coverages 
     with open(infile) as tsvin:
         tsvin = csv.reader(tsvin, delimiter='\t')
         for line in tsvin:
@@ -63,19 +75,55 @@ def genome_avg_coverages(infile):
             for i in range(1, len(line) + 1):
                 genome_counts[i][chrom] += 1
                 genome_coverages[i][chrom] += int(line[i - 1])
-    # calculate the averages
+                genome_SS_coverages[i][chrom] += int(line[i - 1]) * int(line[i - 1])
+    # ~~~ STATS ~~ # 
+    # calculate the averages & std dev
     for genome in genome_counts.iterkeys():
         for chrom in genome_counts[genome].iterkeys():
-            genome_average_coverages[genome][chrom] = genome_coverages[genome][chrom] / genome_counts[genome][chrom]
+            s0 = genome_counts[genome][chrom]
+            s1 = genome_coverages[genome][chrom]
+            s2 = genome_SS_coverages[genome][chrom]
+            # average
+            genome_average_coverages[genome][chrom] = s1 / s0
+            # std dev; watch for count of 1 = divide by zero
+            if (s0 <= 1):
+                genome_std_coverages[genome][chrom] = 0
+            else :
+                # sample std
+                # genome_std_coverages[genome][chrom] = math.sqrt((s0 * s2 - s1 * s1)/(s0 * (s0 - 1)))
+                # population std
+                genome_std_coverages[genome][chrom] = math.sqrt((s0 * s2 - s1 * s1)/(s0 * (s0)))
+    # ~~~ REFORMAT ~~ # 
     # format for printing to stdout; need to keep columns & entries in order !!
+    chrom_list = [genome_average_coverages, genome_std_coverages]
     chrom_output = collections.defaultdict(list)
+    # for k in d1.iterkeys():
+    # d[k] = tuple(d[k] for d in ds)
+    chrom_output_avg = collections.defaultdict(list)
+    chrom_output_sd = collections.defaultdict(list)
     for genome in sorted(genome_average_coverages.keys()):
         for chrom in sorted(genome_average_coverages[genome].keys()):
-            chrom_output[chrom].append(genome_average_coverages[genome][chrom])
+            stats_tup = (genome_average_coverages[genome][chrom], genome_std_coverages[genome][chrom])
+            chrom_output[chrom].append(stats_tup)
+            # for av_value in chrom:
+            #     value = value
+            # chrom_output_avg[chrom].append(str(genome_average_coverages[genome][chrom]))
+            #  + ','.join(str(genome_std_coverages[genome][chrom])
+    for genome in sorted(genome_std_coverages.keys()):
+        for chrom in sorted(genome_std_coverages[genome].keys()):
+            chrom_output_sd[chrom].append(genome_std_coverages[genome][chrom])
     return chrom_output
+    # return chrom_output_avg, chrom_output_sd
 
 if __name__ == '__main__':
-    chrom_output = genome_avg_coverages(input_file)
-    for chrom in sorted(chrom_output.keys()):
-        print chrom + '\t' + '\t'.join(map(str,chrom_output[chrom]))
+    chrom_output_avg = genome_avg_coverages(input_file)
+    # chrom_output_avg, chrom_output_sd = genome_avg_coverages(input_file)
+    # print chrom_output_avg.items()
+    # print '' 
+    # print chrom_output_sd.items()
+    for chrom in sorted(chrom_output_avg.keys()):
+        chrom_stats = chrom_output_avg[chrom]
+        # print chrom + '\t' + '\t'.join(map(str,chrom_stats))
+        # ["%s=%s" % (k, v) for k, v in params.items()]
+        print chrom + '\t' + '\t'.join(map(str,["%s,%s" % (av, sd) for av, sd in chrom_stats]))
 
