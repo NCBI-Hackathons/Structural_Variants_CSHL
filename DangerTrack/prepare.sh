@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-# bash commands for preparing and cleaning the data
+# bash commands for preparing, cleaning, and binning the data
 
 
 ####################
