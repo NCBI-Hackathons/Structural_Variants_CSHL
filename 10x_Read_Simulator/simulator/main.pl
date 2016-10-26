@@ -7,6 +7,7 @@ use lib "./";
 use strict;
 use warnings;
 use feature 'state';
+use Fcntl;
 use Getopt::Std;
 use Data::Dumper;
 use File::Basename;
@@ -20,6 +21,7 @@ die "SURVIVOR executable not found\n" if  (!-e "$absPath/SURVIVOR");
 die "SURVIVOR parameter list not found\n" if  (!-e "$absPath/parameter");
 die "bfr executable not found\n" if  (!-e "$absPath/bfr");
 die "pigz executable not found\n" if  (!-e "$absPath/pigz");
+die "samtools executable not found\n" if  (!-e "$absPath/samtools");
 # Check dependencies end
 
 &main;
@@ -70,8 +72,7 @@ sub main
   my $genomeSize = 0;
   my %faidx = ();
   my @boundary = ();
-  my %readPositionsInFile1 = ();
-  my %readPositionsInFile2 = ();
+  my %readPositionsInFile = ();
   my @barcodes = ();
   my $numBarcodes = 0;
   #Global variables end
@@ -86,7 +87,7 @@ sub main
       { &Log("SURVIVOR round $i done already"); next; }
       &Log("SURVIVOR round $i start");
       &Log("Running: $absPath/SURVIVOR 1 $opts{r} parameter 0 $opts{p}.survivor.$i");
-      system("$absPath/SURVIVOR 1 $opts{r} parameter 0 $opts{p}.survivor.$i 2>/dev/null");
+      system("$absPath/SURVIVOR 1 $opts{r} parameter 0 $opts{p}.survivor.$i 1>/dev/null");
       if(!-e "$opts{p}.survivor.$i.fasta")
       { &LogAndDie("SURVIVOR round $i error on missing $opts{p}.survivor.$i.fasta"); }
       if(!-e "$opts{p}.survivor.$i.insertions.fa")
@@ -108,8 +109,8 @@ sub main
       if(-e "$opts{p}.dwgsim.$i.12.fastq")
       { &Log("DWGSIM round $i done already"); next; }
       &Log("DWGSIM round $i start");
-      &Log("$absPath/dwgsim -N $readsPerHaplotype -e $opts{e} -E $opts{E} -d $opts{i} -s $opts{s} -1 $readLenghtWithBarcode -2 $readLenghtWithBarcode -S 0 -c 0 -m /dev/null $opts{r} $opts{p}.dwgsim.$i");
-      system("$absPath/dwgsim -N $readsPerHaplotype -e $opts{e} -E $opts{E} -d $opts{i} -s $opts{s} -1 $readLenghtWithBarcode -2 $readLenghtWithBarcode -S 0 -c 0 -m /dev/null $opts{r} $opts{p}.dwgsim.$i");
+      &Log("$absPath/dwgsim -N $readsPerHaplotype -e $opts{e} -E $opts{E} -d $opts{i} -s $opts{s} -1 $readLenghtWithBarcode -2 $readLenghtWithBarcode -S 0 -c 0 -m /dev/null $opts{p}.survivor.$i.fasta $opts{p}.dwgsim.$i");
+      system("$absPath/dwgsim -N $readsPerHaplotype -e $opts{e} -E $opts{E} -d $opts{i} -s $opts{s} -1 $readLenghtWithBarcode -2 $readLenghtWithBarcode -S 0 -c 0 -m /dev/null $opts{p}.survivor.$i.fasta $opts{p}.dwgsim.$i");
       if(!-e "$opts{p}.dwgsim.$i.12.fastq")
       { &LogAndDie("DWGSIM round $i error on missing $opts{p}.dwgsim.$i.12.fastq"); }
       &Log("DWGSIM round $i end");
@@ -120,8 +121,15 @@ sub main
   #Load reference genome index
   {
     &Log("Load faidx start");
-    $genomeSize = &LoadFaidx(\%faidx, \@boundary, $opts{r});
-    &LogAndDie("Failed loading genome index $opts{r}.fai") if ($genomeSize == 0);
+
+    for(my $i = 0; $i < $opts{d}; ++$i)
+    {
+      &Log("Load faidx haplotype: $i");
+      &Log("$absPath/samtools faidx $opts{p}.survivor.$i.fasta");
+      system("$absPath/samtools faidx $opts{p}.survivor.$i.fasta");
+      $genomeSize = &LoadFaidx(\%{$faidx{$i}}, \@boundary, "$opts{p}.survivor.$i.fasta");
+      &LogAndDie("Failed loading genome index $opts{p}.survivor.$i.fasta.fai") if ($genomeSize == 0);
+    }
     #print Dumper %faidx;
     &Log("Load faidx end");
   }
@@ -133,25 +141,27 @@ sub main
     for(my $i = 0; $i < $opts{d}; ++$i)
     {
       &Log("Load read positions haplotype $i");
-      $readPositionsInFile1{$i} = ();
-      $readPositionsInFile2{$i} = ();
+      $readPositionsInFile{$i} = ();
       open my $fh, "$opts{p}.dwgsim.$i.12.fastq" or &LogAndDie("Error opening $opts{p}.dwgsim.$i.12.fastq");
       my $l1; my $l2; my $l3; my $l4; my $l5; my $l6; my $l7; my $l8;
+      my $newFpos;
       my $fpos = tell($fh); &LogAndDie("Fail to tell file position") if $fpos == -1;
       while($l1=<$fh>)
       {
         $l2=<$fh>; $l3=<$fh>; $l4=<$fh>; $l5=<$fh>; $l6=<$fh>; $l7=<$fh>; $l8=<$fh>;
+        $newFpos = tell($fh);
+        #if(!eof($fh))
+        #{
+        #  my $c = getc($fh); seek($fh, $newFpos, 0);
+        #  die "$c\n$l1$l2$l3$l4$l5$l6$l7$l8" if $c ne "@";
+        #}
         #@chr1_111758675_111758819_0_1_0_0_2:0:0_3:0:0_0/1
         $l1=~/@(chr\d+)_(\d+?)_/;
-        my $gCoord = &GenomeCoord2Idx(\%faidx, "$1", $2);
+        my $gCoord = &GenomeCoord2Idx(\%{$faidx{$i}}, "$1", $2);
         if($gCoord < 0 || $gCoord >= $genomeSize)
         { &LogAndDie("$1 $2 $gCoord $fpos"); }
-        if(int($gCoord / $arrayLimit) == 0)
-        { push @{${$readPositionsInFile1{$i}}[$gCoord]}, $fpos; }
-        elsif(int($gCoord / $arrayLimit) == 1)
-        { push @{${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}, $fpos; }
-        else {die "Selecting readPositionsInFile error\n";}
-        $fpos = tell($fh);
+        push @{$readPositionsInFile{$i}{$gCoord}}, $fpos;
+        $fpos = $newFpos;
       }
       close $fh;
     }
@@ -184,11 +194,14 @@ sub main
     # ? = 666.6
     #
     my $readsPerMolecule = int(0.499 + ($opts{x} * 1000000) / ($opts{t} * 1000) / $opts{m});
+    &Log("readsPerMolecule: $readsPerMolecule");
 
     # For every Haplotype
     for(my $i = 0; $i < $opts{d}; ++$i)
     {
-      my $readsCountDown = int($opts{x} / $opts{d});
+      &Log("Simulating on haplotype: $i");
+      my $readsCountDown = int($opts{x} * 1000000 / $opts{d});
+      &Log("readsCountDown: $readsCountDown");
       open my $readsInputfh, "$opts{p}.dwgsim.$i.12.fastq" or &LogAndDie("Fail opening $opts{p}.dwgsim.$i.12.fastq");
 
       while($readsCountDown > 0)
@@ -198,18 +211,21 @@ sub main
         while(1)
         {
           my $idx = int(rand($numBarcodes));
-          next if $barcodes[$idx] == -1;
+          next if $barcodes[$idx] eq "";
           $selectedBarcode = $barcodes[$idx];
-          $barcodes[$idx] = -1;
+          $barcodes[$idx] = "";
           last;
         }
 
-        my $numberOfMolecules = &PoissonMoleculePerPartition($opts{m});
+        my $numberOfMolecules = &PoissonMoleculePerPartition($opts{m}-1)+1;
+        #&Log("numberOfMolecules: $numberOfMolecules");
         my $readsToExtract = $numberOfMolecules * $readsPerMolecule;
-        for(my $i = 0; $i < $numberOfMolecules; ++$i)
+        #&Log("readsToExtract: $readsToExtract");
+        for(my $j = 0; $j < $numberOfMolecules; ++$j)
         {
           #Pick a starting position
           my $startingPosition = int(rand($genomeSize));
+          #&Log("startingPosition: $startingPosition");
           #Pick a fragment size
           my $moleculeSize  = &PoissonMoleculeSize($opts{f}*1000);
 
@@ -221,7 +237,7 @@ sub main
             my $newMoleculeSize = $upperBoundary - $startingPosition;
             if($newMoleculeSize < 1000) #dirty thing
             {
-              --$i;
+              --$j;
               next;
             }
             $readsToExtract = int($readsToExtract * $newMoleculeSize / $moleculeSize);
@@ -235,38 +251,26 @@ sub main
             my $filePosToExtract;
             loop2: while($gCoord >= $startingPosition)
             {
-              if(int($gCoord / $arrayLimit) == 0)
-              {
-                loop3: for(my $j = 0; $j < scalar(@{${$readPositionsInFile1{$i}}[$gCoord]}); ++$j)
+                if(not defined $readPositionsInFile{$i}{$gCoord}) { --$gCoord; next loop2; }
+                loop3: for(my $k = 0; $k < scalar(@{$readPositionsInFile{$i}{$gCoord}}); ++$k)
                 {
-                  if(${${$readPositionsInFile1{$i}}[$gCoord]}[$j] != -1)
+                  if(${$readPositionsInFile{$i}{$gCoord}}[$k] != -1)
                   {
-                    $filePosToExtract = ${${$readPositionsInFile1{$i}}[$gCoord]}[$j];
-                    ${${$readPositionsInFile1{$i}}[$gCoord]}[$j] = -1;
+                    $filePosToExtract = ${$readPositionsInFile{$i}{$gCoord}}[$k];
+                    ${$readPositionsInFile{$i}{$gCoord}}[$k] = -1;
                     last loop2;
                   }
                 }
-              }
-              elsif(int($gCoord / $arrayLimit) == 1)
-              {
-                loop3: for(my $j = 0; $j < scalar(@{${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}); ++$j)
-                {
-                  if(${${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}[$j] != -1)
-                  {
-                    $filePosToExtract = ${${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}[$j];
-                    ${${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}[$j] = -1;
-                    last loop2;
-                  }
-                }
-              }
-              else {die "Selecting readPositionsInFile error\n";}
+                --$gCoord;
             }
             next if not defined $filePosToExtract;
 
             #Extract reads and output
-            seek($readsInputfh, $filePosToExtract, 0);
+            #&Log("filePosToExtract: $filePosToExtract");
+            if( seek($readsInputfh, $filePosToExtract, 0) != 1 ) { &LogAndDie("Seek failed on $filePosToExtract");}
             my $l1 = <$readsInputfh>; my $l2 = <$readsInputfh>; my $l3 = <$readsInputfh>; my $l4 = <$readsInputfh>;
             my $l5 = <$readsInputfh>; my $l6 = <$readsInputfh>; my $l7 = <$readsInputfh>; my $l8 = <$readsInputfh>;
+            #print STDERR "$l1$l2$l3$l4$l5$l6$l7$l8";
 
             #Attach barcode
             my $read1OrRead2 = int(rand(2));
@@ -285,6 +289,9 @@ sub main
             #Output reads
             print $fq1Outputfh "$l1$l2$l3$l4";
             print $fq2Outputfh "$l5$l6$l7$l8";
+            --$readsCountDown;
+            if($readsCountDown % 10000 == 0)
+            { &Log("$readsCountDown reads remaining"); }
           }
         }
       }
