@@ -21,6 +21,7 @@ die "SURVIVOR executable not found\n" if  (!-e "$absPath/SURVIVOR");
 die "SURVIVOR parameter list not found\n" if  (!-e "$absPath/parameter");
 die "bfr executable not found\n" if  (!-e "$absPath/bfr");
 die "pigz executable not found\n" if  (!-e "$absPath/pigz");
+die "samtools executable not found\n" if  (!-e "$absPath/samtools");
 # Check dependencies end
 
 &main;
@@ -86,7 +87,7 @@ sub main
       { &Log("SURVIVOR round $i done already"); next; }
       &Log("SURVIVOR round $i start");
       &Log("Running: $absPath/SURVIVOR 1 $opts{r} parameter 0 $opts{p}.survivor.$i");
-      system("$absPath/SURVIVOR 1 $opts{r} parameter 0 $opts{p}.survivor.$i 2>/dev/null");
+      system("$absPath/SURVIVOR 1 $opts{r} parameter 0 $opts{p}.survivor.$i 1>/dev/null");
       if(!-e "$opts{p}.survivor.$i.fasta")
       { &LogAndDie("SURVIVOR round $i error on missing $opts{p}.survivor.$i.fasta"); }
       if(!-e "$opts{p}.survivor.$i.insertions.fa")
@@ -108,8 +109,8 @@ sub main
       if(-e "$opts{p}.dwgsim.$i.12.fastq")
       { &Log("DWGSIM round $i done already"); next; }
       &Log("DWGSIM round $i start");
-      &Log("$absPath/dwgsim -N $readsPerHaplotype -e $opts{e} -E $opts{E} -d $opts{i} -s $opts{s} -1 $readLenghtWithBarcode -2 $readLenghtWithBarcode -S 0 -c 0 -m /dev/null $opts{r} $opts{p}.dwgsim.$i");
-      system("$absPath/dwgsim -N $readsPerHaplotype -e $opts{e} -E $opts{E} -d $opts{i} -s $opts{s} -1 $readLenghtWithBarcode -2 $readLenghtWithBarcode -S 0 -c 0 -m /dev/null $opts{r} $opts{p}.dwgsim.$i");
+      &Log("$absPath/dwgsim -N $readsPerHaplotype -e $opts{e} -E $opts{E} -d $opts{i} -s $opts{s} -1 $readLenghtWithBarcode -2 $readLenghtWithBarcode -S 0 -c 0 -m /dev/null $opts{p}.survivor.$i.fasta $opts{p}.dwgsim.$i");
+      system("$absPath/dwgsim -N $readsPerHaplotype -e $opts{e} -E $opts{E} -d $opts{i} -s $opts{s} -1 $readLenghtWithBarcode -2 $readLenghtWithBarcode -S 0 -c 0 -m /dev/null $opts{p}.survivor.$i.fasta $opts{p}.dwgsim.$i");
       if(!-e "$opts{p}.dwgsim.$i.12.fastq")
       { &LogAndDie("DWGSIM round $i error on missing $opts{p}.dwgsim.$i.12.fastq"); }
       &Log("DWGSIM round $i end");
@@ -120,8 +121,15 @@ sub main
   #Load reference genome index
   {
     &Log("Load faidx start");
-    $genomeSize = &LoadFaidx(\%faidx, \@boundary, $opts{r});
-    &LogAndDie("Failed loading genome index $opts{r}.fai") if ($genomeSize == 0);
+
+    for(my $i = 0; $i < $opts{d}; ++$i)
+    {
+      &Log("Load faidx haplotype: $i");
+      &Log("$absPath/samtools faidx $opts{p}.survivor.$i.fasta");
+      system("$absPath/samtools faidx $opts{p}.survivor.$i.fasta");
+      $genomeSize = &LoadFaidx(\%{$faidx{$i}}, \@boundary, "$opts{p}.survivor.$i.fasta");
+      &LogAndDie("Failed loading genome index $opts{p}.survivor.$i.fasta.fai") if ($genomeSize == 0);
+    }
     #print Dumper %faidx;
     &Log("Load faidx end");
   }
@@ -142,14 +150,14 @@ sub main
       {
         $l2=<$fh>; $l3=<$fh>; $l4=<$fh>; $l5=<$fh>; $l6=<$fh>; $l7=<$fh>; $l8=<$fh>;
         $newFpos = tell($fh);
-        if(!eof($fh))
-        {
-          my $c = getc($fh); seek($fh, $newFpos, 0);
-          die "$c\n$l1$l2$l3$l4$l5$l6$l7$l8" if $c ne "@";
-        }
+        #if(!eof($fh))
+        #{
+        #  my $c = getc($fh); seek($fh, $newFpos, 0);
+        #  die "$c\n$l1$l2$l3$l4$l5$l6$l7$l8" if $c ne "@";
+        #}
         #@chr1_111758675_111758819_0_1_0_0_2:0:0_3:0:0_0/1
         $l1=~/@(chr\d+)_(\d+?)_/;
-        my $gCoord = &GenomeCoord2Idx(\%faidx, "$1", $2);
+        my $gCoord = &GenomeCoord2Idx(\%{$faidx{$i}}, "$1", $2);
         if($gCoord < 0 || $gCoord >= $genomeSize)
         { &LogAndDie("$1 $2 $gCoord $fpos"); }
         push @{$readPositionsInFile{$i}{$gCoord}}, $fpos;
@@ -259,8 +267,7 @@ sub main
 
             #Extract reads and output
             #&Log("filePosToExtract: $filePosToExtract");
-            my $rt = seek($readsInputfh, $filePosToExtract, 0);
-            if( $rt != 1 ) { &LogAndDie("Seek failed on $filePosToExtract");}
+            if( seek($readsInputfh, $filePosToExtract, 0) != 1 ) { &LogAndDie("Seek failed on $filePosToExtract");}
             my $l1 = <$readsInputfh>; my $l2 = <$readsInputfh>; my $l3 = <$readsInputfh>; my $l4 = <$readsInputfh>;
             my $l5 = <$readsInputfh>; my $l6 = <$readsInputfh>; my $l7 = <$readsInputfh>; my $l8 = <$readsInputfh>;
             #print STDERR "$l1$l2$l3$l4$l5$l6$l7$l8";
@@ -283,6 +290,8 @@ sub main
             print $fq1Outputfh "$l1$l2$l3$l4";
             print $fq2Outputfh "$l5$l6$l7$l8";
             --$readsCountDown;
+            if($readsCountDown % 10000 == 0)
+            { &Log("$readsCountDown reads remaining"); }
           }
         }
       }
