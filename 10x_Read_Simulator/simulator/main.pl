@@ -184,11 +184,14 @@ sub main
     # ? = 666.6
     #
     my $readsPerMolecule = int(0.499 + ($opts{x} * 1000000) / ($opts{t} * 1000) / $opts{m});
+    &Log("readsPerMolecule: $readsPerMolecule");
 
     # For every Haplotype
     for(my $i = 0; $i < $opts{d}; ++$i)
     {
-      my $readsCountDown = int($opts{x} / $opts{d});
+      &Log("Simulating on haplotype: $i");
+      my $readsCountDown = int($opts{x} * 1000000 / $opts{d});
+      &Log("readsCountDown: $readsCountDown");
       open my $readsInputfh, "$opts{p}.dwgsim.$i.12.fastq" or &LogAndDie("Fail opening $opts{p}.dwgsim.$i.12.fastq");
 
       while($readsCountDown > 0)
@@ -198,18 +201,21 @@ sub main
         while(1)
         {
           my $idx = int(rand($numBarcodes));
-          next if $barcodes[$idx] == -1;
+          next if $barcodes[$idx] eq "";
           $selectedBarcode = $barcodes[$idx];
-          $barcodes[$idx] = -1;
+          $barcodes[$idx] = "";
           last;
         }
 
-        my $numberOfMolecules = &PoissonMoleculePerPartition($opts{m});
+        my $numberOfMolecules = &PoissonMoleculePerPartition($opts{m}-1)+1;
+        &Log("numberOfMolecules: $numberOfMolecules");
         my $readsToExtract = $numberOfMolecules * $readsPerMolecule;
+        &Log("readsToExtract: $readsToExtract");
         for(my $i = 0; $i < $numberOfMolecules; ++$i)
         {
           #Pick a starting position
           my $startingPosition = int(rand($genomeSize));
+          &Log("startingPosition: $startingPosition");
           #Pick a fragment size
           my $moleculeSize  = &PoissonMoleculeSize($opts{f}*1000);
 
@@ -237,6 +243,7 @@ sub main
             {
               if(int($gCoord / $arrayLimit) == 0)
               {
+                if(not defined @{${$readPositionsInFile1{$i}}[$gCoord]}) { --$gCoord; next loop2; }
                 loop3: for(my $j = 0; $j < scalar(@{${$readPositionsInFile1{$i}}[$gCoord]}); ++$j)
                 {
                   if(${${$readPositionsInFile1{$i}}[$gCoord]}[$j] != -1)
@@ -246,9 +253,11 @@ sub main
                     last loop2;
                   }
                 }
+                --$gCoord;
               }
               elsif(int($gCoord / $arrayLimit) == 1)
               {
+                if(not defined @{${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}) { --$gCoord; next loop2; }
                 loop3: for(my $j = 0; $j < scalar(@{${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}); ++$j)
                 {
                   if(${${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}[$j] != -1)
@@ -258,12 +267,14 @@ sub main
                     last loop2;
                   }
                 }
+                --$gCoord;
               }
               else {die "Selecting readPositionsInFile error\n";}
             }
             next if not defined $filePosToExtract;
 
             #Extract reads and output
+            &Log("filePosToExtract: $filePosToExtract");
             seek($readsInputfh, $filePosToExtract, 0);
             my $l1 = <$readsInputfh>; my $l2 = <$readsInputfh>; my $l3 = <$readsInputfh>; my $l4 = <$readsInputfh>;
             my $l5 = <$readsInputfh>; my $l6 = <$readsInputfh>; my $l7 = <$readsInputfh>; my $l8 = <$readsInputfh>;
@@ -285,6 +296,7 @@ sub main
             #Output reads
             print $fq1Outputfh "$l1$l2$l3$l4";
             print $fq2Outputfh "$l5$l6$l7$l8";
+            --$readsCountDown;
           }
         }
       }
