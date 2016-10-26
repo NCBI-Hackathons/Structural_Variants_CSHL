@@ -16,6 +16,8 @@ args <- commandArgs(TRUE)
 
 cov_file <- args[1]
 outdir <- args[2]
+# save.image(file=file.path(outdir, "plot_avg_args.Rdata"),compress = TRUE)
+# load("../test_output/plot_avg_args.Rdata")
 
 # read in the file
 coverage_df <- read.table(cov_file)
@@ -31,22 +33,23 @@ coverage_df <- reshape2::melt(coverage_df, id.vars = "chrom", value.name = "cove
 # peel off the coverage stats column and turn into a grouping factor
 stat_strings <- strsplit(as.character(coverage_df$coverage), ',')
 
-stats_df <- data.frame(matrix(unlist(stat_strings), nrow=length(stat_strings), byrow=T))
+stats_df <- data.frame(matrix(as.numeric(unlist(stat_strings)), nrow=length(stat_strings), byrow=T))
 colnames(stats_df) <- c("average", "std_dev")
 
 coverage_df <- cbind(coverage_df[c("chrom", "sample")], stats_df)
+# colnames(stats_df) <- c("chrom", "sample", "average", "std_dev")
 
 # melt again
 coverage_df <- reshape2::melt(coverage_df, id.vars = c("chrom","sample"), value.name = "coverage", variable.name = "statistic")
 
 # fix chrom order for plot
-coverage_df <- coverage_df[with(coverage_df, order(chrom, sample)), ]
+coverage_df <- coverage_df[with(coverage_df, order(chrom)), ]
 
 # coverage_df
 # make horizontal stacked grouped barplot
 # plot by chrom
 # pdf(file = file.path(outdir, "avg_cov_byChrom.pdf"), height = 8, width = 8)
-# ggplot(coverage_df, aes(x = chrom, y = avg_coverage, fill = factor(sample))) +
+# ggplot(coverage_df, aes(x = chrom, y = coverage, fill = factor(sample))) +
 #   geom_bar(stat="identity", position="dodge") + # remove 'position' for stacked plot
 #     coord_flip() + 
 #     labs(title="Average Coverage Per Chromosome\nPer Samples", x="Chromosome", y = "Average Coverage")
@@ -58,5 +61,10 @@ pdf(file = file.path(outdir, "avg_cov_byGenome.pdf"), height = 8, width = 8)
 ggplot(coverage_df_avg, aes(x = sample, y = coverage, fill = factor(chrom))) +
   geom_bar(stat="identity", position="dodge") + 
     coord_flip() + 
-    labs(title="Average Coverage Per Chromosome\nPer Samples", x="Sample", y = "Average Coverage")
+    # scale_y_continuous(breaks = waiver()) + 
+    # coord_cartesian(ylim=c(0,max(numeric(coverage_df_avg[["coverage"]])))) +
+    labs(title="Average Coverage Per Chromosome\nPer Samples", x="Sample", y = "Average Coverage", fill="Chromosome")
+    # need to fix axis scale markers !
 dev.off()
+save.image(file=file.path(outdir, "plot_avg.Rdata"),compress = TRUE)
+# load("plot_avg.Rdata")
