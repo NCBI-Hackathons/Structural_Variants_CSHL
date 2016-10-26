@@ -29,16 +29,16 @@ class TreeNode(object):
         self.end = None
         self.next = []
 
-# the class for filtering scalpel vcf file
-class parseVcf:
-    'filter based on parental coverage, chi2 score, and alternative allele coverage'
-    def __init__(self, in_vcf):# , mc, ac, zyg, cr, chi2, fp, out_vcf):
+
+class topSorter:
+    'parse & filter vcf files, construct & traverse DAGs'
+    def __init__(self, in_vcf):
         self.in_vcf  = in_vcf
         # self.sub_vcf = []
         self.large_variants = []
         self.chr_sizes = {}
 
-    # a read function for reading and filtering
+    # function for reading and filtering vcf files
     def readVcf(self):
         # read a vcf file
         self.vcf_reader = vcf.Reader(open(self.in_vcf, 'r'))
@@ -46,7 +46,8 @@ class parseVcf:
         # [temp] filter out variants without END
         hashset = set()
         for variant in self.vcf_reader:
-            if 'END' in variant.INFO and 'PAIR_COUNT' in variant.INFO and variant.INFO['SVTYPE'] in ("DEL", "DUP", "INV"):
+            if 'END' in variant.INFO and 'PAIR_COUNT' in variant.INFO \
+                and variant.INFO['SVTYPE'] in ("DEL", "DUP", "INV"):
                 if abs(variant.INFO['END'] - variant.POS) > 10000 and variant.INFO['PAIR_COUNT'] >= 10:
                     id = (variant.CHROM, variant.POS, variant.INFO['END'])
                     if id not in hashset:
@@ -68,13 +69,13 @@ class parseVcf:
         bed_str = ""
         for var in self.large_variants:
             chr = var.CHROM
-            before = chr + "\t" + str(int(var.POS)-1001) + "\t" + str(int(var.POS)-1) + "\t" + var.ID + ",before\n"
-            left = chr + "\t" + str(int(var.POS)-1) + "\t" + str(int(var.POS)+999) + "\t" + var.ID + ",left\n"
-            right = chr + "\t" + str(int(var.INFO['END'])-1001) + "\t" + str(int(var.INFO['END'])-1) + "\t" + var.ID + ",right\n"
-            after = chr + "\t" + str(int(var.INFO['END'])-1) + "\t" + str(int(var.INFO['END'])+999) + "\t" + var.ID + ",after\n"
+            before = chr +"\t"+ str(var.POS-1001) +"\t"+ str(var.POS-1) +"\t"+ var.ID + ",before\n"
+            left   = chr +"\t"+ str(var.POS-1) +"\t"+ str(var.POS+999) +"\t"+ var.ID + ",left\n"
+            right = chr +"\t"+ str(var.INFO['END']-1001) +"\t"+ str(var.INFO['END']-1) +"\t"+ var.ID + ",right\n"
+            after = chr +"\t"+ str(var.INFO['END']-1) +"\t"+ str(var.INFO['END']+999) +"\t"+ var.ID + ",after\n"
             bed_str += before + left + right + after
 
-        # write to local
+        # write bed file to local
         bed_out = open(self.in_vcf + ".bed", "w")
         bed_out.write(bed_str)
 
@@ -128,13 +129,18 @@ class parseVcf:
         n = len(self.graph["chr20"])
         # print (n)
         example = self.graph["chr20"]
-        print(example)
-        DAG.add_nodes_from(example)
-        # add edges
+        # print(example)
+        #for i in example:
+        #    DAG.add_node(i)
+        #DAG.add_nodes_from(example)
+        #print(DAG.nodes())
+        # initialize the graph with equal weight
         for i in range(len(example)-1):
+            DAG.add_node(example[i]) #
+            DAG.add_node(example[i+1]) #
             DAG.add_edge(example[i], example[i+1], weight=1)
             if example[i][3] == "DEL":
-                DAG.add_edge(example[i-1], example[i+1], weight=1)
+                DAG.add_edge(example[i-1], example[i+1], weight=30)
             elif example[i][3] == "DUP":
                 nodeCopy = (example[i][0], example[i][1], example[i][2], "DUP_COPY")
                 DAG.add_node(nodeCopy)
@@ -142,9 +148,10 @@ class parseVcf:
                 DAG.add_edge(nodeCopy, example[i+1], weight=1)
             elif example[i][3] == "INV":
                 nodeInv = (example[i][0], example[i][2], example[i][1], "INV_FLIP")
-                DAG.add_edge(example[i-1], nodeInv, weight=10)
-                DAG.add_edge(nodeInv, example[i+1], weight=10)
+                DAG.add_edge(example[i-1], nodeInv, weight=1)
+                DAG.add_edge(nodeInv, example[i+1], weight=1)
         # print(nx.find_cycle(DAG))# .edges())
+        print(DAG.nodes())
         print(DAG.edges())
 
         # topological sorting
@@ -153,7 +160,10 @@ class parseVcf:
         print ("[status]\tOrder of the nodes after topological sorting: ", flush=True)
         print ("[results]\t", order, flush=True)
         longest = nx.dag_longest_path(DAG)
-        print ("[results]\t Longest", longest, flush=True)
+        print ("[results]\t Longest\n", longest, flush=True)
+        longestDis = nx.dag_longest_path_length(DAG)
+        print ("[results]\t Longest length: ", longestDis, flush=True)
+
         '''
         # build a tree
         start = order[0]
@@ -208,7 +218,7 @@ if __name__ == '__main__':
 
     # process the file if the input files exist
     if (args.i!=None):
-        worker = parseVcf(args.i)
+        worker = topSorter(args.i)
         print("[status]\tReading the vcf file: " + str(args.i), flush=True)
         worker.readVcf()
         print("[execute]\tExporting the large SVs to vcf and flanking regions to a bed file", flush=True)
