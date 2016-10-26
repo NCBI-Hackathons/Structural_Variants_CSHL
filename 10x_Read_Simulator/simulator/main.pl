@@ -37,15 +37,16 @@ END {
 
 sub main
 {
+  &usage if (@ARGV < 1);
   my %opts = (h=>undef, d=>2, r=>undef, p=>undef, b=>undef,
-              e=>0.01, E=>0.01, i=>350, s=>35, x=>1000, f=>50, t=>1500 );
-  getopts('hd:r:S:D:e:E:', \%opts);
-  &usage if (@ARGV < 1 || defined $opts{h});
+              e=>0.01, E=>0.01, i=>350, s=>35, x=>1000, f=>50, t=>1500, m=>10 );
+  getopts('hd:r:p:b:e:E:i:s:x:f:t:m:', \%opts);
+  &usage if (defined $opts{h});
 
   #Check options
   die "Number of haplotypes should be between 1 to 3\n" if ($opts{d} < 1 || $opts{d} > 3); #3 is a soft limit
   die "Please provide a reference genome with -r\n" if (not defined $opts{r});
-  die "Please provide a output prefix with -r\n" if (not defined $opts{p});
+  die "Please provide a output prefix with -p\n" if (not defined $opts{p});
   die "Please provide a barcodes file with -b\n" if (not defined $opts{b});
   die "Reference genome $opts{r} not exist\n" if (!-e "$opts{r}");
   die "Reference genome index $opts{r}.fai not exist\n" if (!-e "$opts{r}.fai");
@@ -54,20 +55,23 @@ sub main
   die "The value of -e should be set between 0 and 1\n" if ( $opts{e} < 0 || $opts{e} > 1 );
   die "The value of -E should be set between 0 and 1\n" if ( $opts{E} < 0 || $opts{E} > 1 );
   die "The value of -i should be set between 350 and 400\n" if ( $opts{i} < 350 || $opts{i} > 400 );
-  die "The value of -s should be set between 35 and 40\n" if ( $opts{s} < 350 || $opts{s} > 400 );
-  die "The value of -x should be set between 800 and 1200\n" if ( $opts{x} < 800 || $opts{x} >1200 );
-  die "The value of -f should be set between 50 and 100\n" if ( $opts{f} < 50 || $opts{f} >100 );
-  die "The value of -t should be set between 1300 and 1700\n" if ( $opts{t} < 1300 || $opts{t} >1700 );
+  die "The value of -s should be set between 35 and 40\n" if ( $opts{s} < 35 || $opts{s} > 40 );
+  #die "The value of -x should be set between 800 and 1200\n" if ( $opts{x} < 800 || $opts{x} >1200 );
+  #die "The value of -f should be set between 50 and 100\n" if ( $opts{f} < 50 || $opts{f} >100 );
+  #die "The value of -t should be set between 1300 and 1700\n" if ( $opts{t} < 1300 || $opts{t} >1700 );
+  #die "The value of -m should be set between 5 and 15\n" if ( $opts{m} < 5 || $opts{m} >15 );
   warn "$opts{p}.status exists\n" if (-e "$opts{p}.status");
   #Check options end
 
   #Global variables
   &Log("$opts{p}.status"); #Initializing Log routine
+  my $arrayLimit = 2147483648;
   my $readLenghtWithBarcode = 151;
   my $genomeSize = 0;
   my %faidx = ();
   my @boundary = ();
-  my %readPositionsInFile = ();
+  my %readPositionsInFile1 = ();
+  my %readPositionsInFile2 = ();
   my @barcodes = ();
   my $numBarcodes = 0;
   #Global variables end
@@ -81,7 +85,8 @@ sub main
       if(-e "$opts{p}.survivor.$i.fasta" && -e "$opts{p}.survivor.$i.insertions.fa" && -e "$opts{p}.survivor.$i.bed")
       { &Log("SURVIVOR round $i done already"); next; }
       &Log("SURVIVOR round $i start");
-      system("$absPath/SURVIVOR 1 $opts{r} parameter 0 $opts{p}.survivor.$i");
+      &Log("Running: $absPath/SURVIVOR 1 $opts{r} parameter 0 $opts{p}.survivor.$i");
+      system("$absPath/SURVIVOR 1 $opts{r} parameter 0 $opts{p}.survivor.$i 2>/dev/null");
       if(!-e "$opts{p}.survivor.$i.fasta")
       { &LogAndDie("SURVIVOR round $i error on missing $opts{p}.survivor.$i.fasta"); }
       if(!-e "$opts{p}.survivor.$i.insertions.fa")
@@ -99,13 +104,12 @@ sub main
     for(my $i = 0; $i < $opts{d}; ++$i)
     {
       # dwgsim command
-      # ./dwgsim -N 1000 -e 0.02 -E 0.02 -d 350 -s 35 -1 135 -2 135 -S 0 -c 0 ref.fa ./test
+      # ./dwgsim -N 1000 -e 0.02 -E 0.02 -d 350 -s 35 -1 151 -2 151 -S 0 -c 0 ref.fa ./test
       if(-e "$opts{p}.dwgsim.$i.12.fastq")
       { &Log("DWGSIM round $i done already"); next; }
       &Log("DWGSIM round $i start");
-      system("$absPath/dwgsim -N $readsPerHaplotype -e $opts{e} -E $opts{E} -d $opts{i}\
-              -s $opts{s} -1 $readLenghtWithBarcode -2 $readLenghtWithBarcode -S 0 -c 0\
-              -m /dev/null $opts{r} $opts{p}.dwgsim.$i");
+      &Log("$absPath/dwgsim -N $readsPerHaplotype -e $opts{e} -E $opts{E} -d $opts{i} -s $opts{s} -1 $readLenghtWithBarcode -2 $readLenghtWithBarcode -S 0 -c 0 -m /dev/null $opts{r} $opts{p}.dwgsim.$i");
+      system("$absPath/dwgsim -N $readsPerHaplotype -e $opts{e} -E $opts{E} -d $opts{i} -s $opts{s} -1 $readLenghtWithBarcode -2 $readLenghtWithBarcode -S 0 -c 0 -m /dev/null $opts{r} $opts{p}.dwgsim.$i");
       if(!-e "$opts{p}.dwgsim.$i.12.fastq")
       { &LogAndDie("DWGSIM round $i error on missing $opts{p}.dwgsim.$i.12.fastq"); }
       &Log("DWGSIM round $i end");
@@ -125,9 +129,12 @@ sub main
 
   #Load read positions into memory
   {
+    &Log("Load read positions start");
     for(my $i = 0; $i < $opts{d}; ++$i)
     {
-      $readPositionsInFile{$i} = ();
+      &Log("Load read positions haplotype $i");
+      $readPositionsInFile1{$i} = ();
+      $readPositionsInFile2{$i} = ();
       open my $fh, "$opts{p}.dwgsim.$i.12.fastq" or &LogAndDie("Error opening $opts{p}.dwgsim.$i.12.fastq");
       my $l1; my $l2; my $l3; my $l4; my $l5; my $l6; my $l7; my $l8;
       my $fpos = tell($fh); &LogAndDie("Fail to tell file position") if $fpos == -1;
@@ -137,27 +144,37 @@ sub main
         #@chr1_111758675_111758819_0_1_0_0_2:0:0_3:0:0_0/1
         $l1=~/@(chr\d+)_(\d+?)_/;
         my $gCoord = &GenomeCoord2Idx(\%faidx, "$1", $2);
-        push @{${$readPositionsInFile{$i}}[$gCoord]}, $fpos;
+        if($gCoord < 0 || $gCoord >= $genomeSize)
+        { &LogAndDie("$1 $2 $gCoord $fpos"); }
+        if(int($gCoord / $arrayLimit) == 0)
+        { push @{${$readPositionsInFile1{$i}}[$gCoord]}, $fpos; }
+        elsif(int($gCoord / $arrayLimit) == 1)
+        { push @{${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}, $fpos; }
+        else {die "Selecting readPositionsInFile error\n";}
         $fpos = tell($fh);
       }
       close $fh;
     }
+    &Log("Load read positions end");
   }
   #Load read positions into memory end
 
   #Load barcodes
   {
+    &Log("Load barcodes start");
     open my $fh, "$opts{b}" or &LogAndDie("Barcodes file $opts{b} not exist");
     @barcodes = <$fh>; chomp(@barcodes);
     $numBarcodes = scalar(@barcodes);
     close $fh;
+    &Log("Load barcodes end");
   }
   #Load barcodes end
 
   #Simulate reads
   {
-    open my $fq1Outputfh, "./bfr -b 256M | ./pigz -c > $opts{p}.10Xsimulate.1.fq.gz" or &LogAndDie("Error opening $opts{p}.10Xsimulate.1.fq.gz");
-    open my $fq2Outputfh, "./bfr -b 256M | ./pigz -c > $opts{p}.10Xsimulate.2.fq.gz" or &LogAndDie("Error opening $opts{p}.10Xsimulate.2.fq.gz");
+    &Log("Simulate reads start");
+    open my $fq1Outputfh, "| $absPath/bfr -b 256M | $absPath/pigz -c > $opts{p}.10Xsimulate.1.fq.gz" or &LogAndDie("Error opening $opts{p}.10Xsimulate.1.fq.gz");
+    open my $fq2Outputfh, "| $absPath/bfr -b 256M | $absPath/pigz -c > $opts{p}.10Xsimulate.2.fq.gz" or &LogAndDie("Error opening $opts{p}.10Xsimulate.2.fq.gz");
 
     # depthPerMol * molLength * #molPerPartition * Partitions = reads * length
     # ? * 50k * 10 * 1.5M = 1000M * 270
@@ -218,15 +235,31 @@ sub main
             my $filePosToExtract;
             loop2: while($gCoord >= $startingPosition)
             {
-              loop3: for(my $j = 0; $j < scalar(@{${$readPositionsInFile{$i}}[$gCoord]}); ++$j)
+              if(int($gCoord / $arrayLimit) == 0)
               {
-                if(${${$readPositionsInFile{$i}}[$gCoord]}[$j] != -1)
+                loop3: for(my $j = 0; $j < scalar(@{${$readPositionsInFile1{$i}}[$gCoord]}); ++$j)
                 {
-                  $filePosToExtract = ${${$readPositionsInFile{$i}}[$gCoord]}[$j];
-                  ${${$readPositionsInFile{$i}}[$gCoord]}[$j] = -1;
-                  last loop2;
+                  if(${${$readPositionsInFile1{$i}}[$gCoord]}[$j] != -1)
+                  {
+                    $filePosToExtract = ${${$readPositionsInFile1{$i}}[$gCoord]}[$j];
+                    ${${$readPositionsInFile1{$i}}[$gCoord]}[$j] = -1;
+                    last loop2;
+                  }
                 }
               }
+              elsif(int($gCoord / $arrayLimit) == 1)
+              {
+                loop3: for(my $j = 0; $j < scalar(@{${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}); ++$j)
+                {
+                  if(${${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}[$j] != -1)
+                  {
+                    $filePosToExtract = ${${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}[$j];
+                    ${${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}[$j] = -1;
+                    last loop2;
+                  }
+                }
+              }
+              else {die "Selecting readPositionsInFile error\n";}
             }
             next if not defined $filePosToExtract;
 
@@ -261,6 +294,7 @@ sub main
 
     close $fq1Outputfh;
     close $fq2Outputfh;
+    &Log("Simulate reads end");
   }
   #Simulate reads end
 
@@ -269,7 +303,7 @@ sub main
 
 sub usage {
   die(qq/
-    Usage:   $0 -r <reference> -p <output prefix> -b <barcodes> -o <fq1> -O <fq2> [options]
+    Usage:   $0 -r <reference> -p <output prefix> -b <barcodes> [options]
 
     Other options:
     -d <int>    Haplotypes to simulate [2]
@@ -296,13 +330,13 @@ sub Log
   }
   my $time = localtime;
   print $statusFH "$time: $_[0]\n";
+  print STDERR "$time: $_[0]\n";
 }
 
 sub LogAndDie
 {
   &Log(@_);
-  my $time = localtime;
-  die "$time: $_[0]\n";
+  die $!;
 }
 # Log routine end
 
