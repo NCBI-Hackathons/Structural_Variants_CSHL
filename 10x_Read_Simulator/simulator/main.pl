@@ -7,6 +7,7 @@ use lib "./";
 use strict;
 use warnings;
 use feature 'state';
+use Fcntl;
 use Getopt::Std;
 use Data::Dumper;
 use File::Basename;
@@ -70,8 +71,7 @@ sub main
   my $genomeSize = 0;
   my %faidx = ();
   my @boundary = ();
-  my %readPositionsInFile1 = ();
-  my %readPositionsInFile2 = ();
+  my %readPositionsInFile = ();
   my @barcodes = ();
   my $numBarcodes = 0;
   #Global variables end
@@ -133,25 +133,27 @@ sub main
     for(my $i = 0; $i < $opts{d}; ++$i)
     {
       &Log("Load read positions haplotype $i");
-      $readPositionsInFile1{$i} = ();
-      $readPositionsInFile2{$i} = ();
+      $readPositionsInFile{$i} = ();
       open my $fh, "$opts{p}.dwgsim.$i.12.fastq" or &LogAndDie("Error opening $opts{p}.dwgsim.$i.12.fastq");
       my $l1; my $l2; my $l3; my $l4; my $l5; my $l6; my $l7; my $l8;
+      my $newFpos;
       my $fpos = tell($fh); &LogAndDie("Fail to tell file position") if $fpos == -1;
       while($l1=<$fh>)
       {
         $l2=<$fh>; $l3=<$fh>; $l4=<$fh>; $l5=<$fh>; $l6=<$fh>; $l7=<$fh>; $l8=<$fh>;
+        $newFpos = tell($fh);
+        if(!eof($fh))
+        {
+          my $c = getc($fh); seek($fh, $newFpos, 0);
+          die "$c\n$l1$l2$l3$l4$l5$l6$l7$l8" if $c ne "@";
+        }
         #@chr1_111758675_111758819_0_1_0_0_2:0:0_3:0:0_0/1
         $l1=~/@(chr\d+)_(\d+?)_/;
         my $gCoord = &GenomeCoord2Idx(\%faidx, "$1", $2);
         if($gCoord < 0 || $gCoord >= $genomeSize)
         { &LogAndDie("$1 $2 $gCoord $fpos"); }
-        if(int($gCoord / $arrayLimit) == 0)
-        { push @{${$readPositionsInFile1{$i}}[$gCoord]}, $fpos; }
-        elsif(int($gCoord / $arrayLimit) == 1)
-        { push @{${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}, $fpos; }
-        else {die "Selecting readPositionsInFile error\n";}
-        $fpos = tell($fh);
+        push @{$readPositionsInFile{$i}{$gCoord}}, $fpos;
+        $fpos = $newFpos;
       }
       close $fh;
     }
@@ -208,14 +210,14 @@ sub main
         }
 
         my $numberOfMolecules = &PoissonMoleculePerPartition($opts{m}-1)+1;
-        &Log("numberOfMolecules: $numberOfMolecules");
+        #&Log("numberOfMolecules: $numberOfMolecules");
         my $readsToExtract = $numberOfMolecules * $readsPerMolecule;
-        &Log("readsToExtract: $readsToExtract");
-        for(my $i = 0; $i < $numberOfMolecules; ++$i)
+        #&Log("readsToExtract: $readsToExtract");
+        for(my $j = 0; $j < $numberOfMolecules; ++$j)
         {
           #Pick a starting position
           my $startingPosition = int(rand($genomeSize));
-          &Log("startingPosition: $startingPosition");
+          #&Log("startingPosition: $startingPosition");
           #Pick a fragment size
           my $moleculeSize  = &PoissonMoleculeSize($opts{f}*1000);
 
@@ -227,7 +229,7 @@ sub main
             my $newMoleculeSize = $upperBoundary - $startingPosition;
             if($newMoleculeSize < 1000) #dirty thing
             {
-              --$i;
+              --$j;
               next;
             }
             $readsToExtract = int($readsToExtract * $newMoleculeSize / $moleculeSize);
@@ -241,43 +243,27 @@ sub main
             my $filePosToExtract;
             loop2: while($gCoord >= $startingPosition)
             {
-              if(int($gCoord / $arrayLimit) == 0)
-              {
-                if(not defined @{${$readPositionsInFile1{$i}}[$gCoord]}) { --$gCoord; next loop2; }
-                loop3: for(my $j = 0; $j < scalar(@{${$readPositionsInFile1{$i}}[$gCoord]}); ++$j)
+                if(not defined $readPositionsInFile{$i}{$gCoord}) { --$gCoord; next loop2; }
+                loop3: for(my $k = 0; $k < scalar(@{$readPositionsInFile{$i}{$gCoord}}); ++$k)
                 {
-                  if(${${$readPositionsInFile1{$i}}[$gCoord]}[$j] != -1)
+                  if(${$readPositionsInFile{$i}{$gCoord}}[$k] != -1)
                   {
-                    $filePosToExtract = ${${$readPositionsInFile1{$i}}[$gCoord]}[$j];
-                    ${${$readPositionsInFile1{$i}}[$gCoord]}[$j] = -1;
+                    $filePosToExtract = ${$readPositionsInFile{$i}{$gCoord}}[$k];
+                    ${$readPositionsInFile{$i}{$gCoord}}[$k] = -1;
                     last loop2;
                   }
                 }
                 --$gCoord;
-              }
-              elsif(int($gCoord / $arrayLimit) == 1)
-              {
-                if(not defined @{${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}) { --$gCoord; next loop2; }
-                loop3: for(my $j = 0; $j < scalar(@{${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}); ++$j)
-                {
-                  if(${${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}[$j] != -1)
-                  {
-                    $filePosToExtract = ${${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}[$j];
-                    ${${$readPositionsInFile2{$i}}[$gCoord % $arrayLimit]}[$j] = -1;
-                    last loop2;
-                  }
-                }
-                --$gCoord;
-              }
-              else {die "Selecting readPositionsInFile error\n";}
             }
             next if not defined $filePosToExtract;
 
             #Extract reads and output
-            &Log("filePosToExtract: $filePosToExtract");
-            seek($readsInputfh, $filePosToExtract, 0);
+            #&Log("filePosToExtract: $filePosToExtract");
+            my $rt = seek($readsInputfh, $filePosToExtract, 0);
+            if( $rt != 1 ) { &LogAndDie("Seek failed on $filePosToExtract");}
             my $l1 = <$readsInputfh>; my $l2 = <$readsInputfh>; my $l3 = <$readsInputfh>; my $l4 = <$readsInputfh>;
             my $l5 = <$readsInputfh>; my $l6 = <$readsInputfh>; my $l7 = <$readsInputfh>; my $l8 = <$readsInputfh>;
+            #print STDERR "$l1$l2$l3$l4$l5$l6$l7$l8";
 
             #Attach barcode
             my $read1OrRead2 = int(rand(2));
