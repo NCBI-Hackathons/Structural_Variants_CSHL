@@ -25,12 +25,24 @@ colnames(coverage_df)[1] <- "chrom"
 colnames(coverage_df)[-1] <- paste("genome_", seq_along(colnames(coverage_df)[-1]), sep="")
 
 # melt into long format
-coverage_df <- reshape2::melt(coverage_df, id.vars = "chrom", value.name = "avg_coverage", variable.name = "sample")
+coverage_df <- reshape2::melt(coverage_df, id.vars = "chrom", value.name = "coverage", variable.name = "sample")
+
+
+# peel off the coverage stats column and turn into a grouping factor
+stat_strings <- strsplit(as.character(coverage_df$coverage), ',')
+
+stats_df <- data.frame(matrix(unlist(stat_strings), nrow=length(stat_strings), byrow=T))
+colnames(stats_df) <- c("average", "std_dev")
+
+coverage_df <- cbind(coverage_df[c("chrom", "sample")], stats_df)
+
+# melt again
+coverage_df <- reshape2::melt(coverage_df, id.vars = c("chrom","sample"), value.name = "coverage", variable.name = "statistic")
 
 # fix chrom order for plot
-coverage_df <- coverage_df[with(coverage_df, order(chrom)), ]
+coverage_df <- coverage_df[with(coverage_df, order(chrom, sample)), ]
 
-
+# coverage_df
 # make horizontal stacked grouped barplot
 # plot by chrom
 # pdf(file = file.path(outdir, "avg_cov_byChrom.pdf"), height = 8, width = 8)
@@ -41,8 +53,9 @@ coverage_df <- coverage_df[with(coverage_df, order(chrom)), ]
 # dev.off()
 
 # plot by genome
+coverage_df_avg <- subset(coverage_df, statistic == "average")
 pdf(file = file.path(outdir, "avg_cov_byGenome.pdf"), height = 8, width = 8)
-ggplot(coverage_df, aes(x = sample, y = avg_coverage, fill = factor(chrom))) +
+ggplot(coverage_df_avg, aes(x = sample, y = coverage, fill = factor(chrom))) +
   geom_bar(stat="identity", position="dodge") + 
     coord_flip() + 
     labs(title="Average Coverage Per Chromosome\nPer Samples", x="Sample", y = "Average Coverage")
