@@ -44,10 +44,14 @@ class parseVcf:
         self.vcf_reader = vcf.Reader(open(self.in_vcf, 'r'))
 
         # [temp] filter out variants without END
+        hashset = set()
         for variant in self.vcf_reader:
-            if 'END' in variant.INFO and variant.INFO['SVTYPE'] in ("DEL", "DUP", "INV"):
-                if abs(variant.INFO['END'] - variant.POS) > 10000:
-                    self.large_variants.append(variant)
+            if 'END' in variant.INFO and 'PAIR_COUNT' in variant.INFO and variant.INFO['SVTYPE'] in ("DEL", "DUP", "INV"):
+                if abs(variant.INFO['END'] - variant.POS) > 10000 and variant.INFO['PAIR_COUNT'] >= 10:
+                    id = (variant.CHROM, variant.POS, variant.INFO['END'])
+                    if id not in hashset:
+                        self.large_variants.append(variant)
+                        hashset.add(id)
 
         # create a dict of chromosome: size
         for k,v in self.vcf_reader.contigs.items():
@@ -121,20 +125,35 @@ class parseVcf:
         DAG = nx.DiGraph()
         chroms = self.graph.keys()
         # add nodes
+        n = len(self.graph["chr20"])
+        # print (n)
         example = self.graph["chr20"]
         print(example)
         DAG.add_nodes_from(example)
         # add edges
         for i in range(len(example)-1):
             DAG.add_edge(example[i], example[i+1], weight=1)
-        # print(DAG.out_edges())
-        # print(DAG)
+            if example[i][3] == "DEL":
+                DAG.add_edge(example[i-1], example[i+1], weight=1)
+            elif example[i][3] == "DUP":
+                nodeCopy = (example[i][0], example[i][1], example[i][2], "DUP_COPY")
+                DAG.add_node(nodeCopy)
+                DAG.add_edge(example[i], nodeCopy, weight=1)
+                DAG.add_edge(nodeCopy, example[i+1], weight=1)
+            elif example[i][3] == "INV":
+                nodeInv = (example[i][0], example[i][2], example[i][1], "INV_FLIP")
+                DAG.add_edge(example[i-1], nodeInv, weight=10)
+                DAG.add_edge(nodeInv, example[i+1], weight=10)
+        # print(nx.find_cycle(DAG))# .edges())
+        print(DAG.edges())
 
         # topological sorting
         print ("[execute]\tPerforming topological sorting", flush=True)
         order = nx.topological_sort(DAG)
         print ("[status]\tOrder of the nodes after topological sorting: ", flush=True)
-        print (order)
+        print ("[results]\t", order, flush=True)
+        longest = nx.dag_longest_path(DAG)
+        print ("[results]\t Longest", longest, flush=True)
         '''
         # build a tree
         start = order[0]
@@ -145,7 +164,7 @@ class parseVcf:
         while nodes:
             source = nodes.pop()
             labels[source] = source
-            for target in DG.neighbors(source):
+            for target in DAG.neighbors(source):
                 if target in tree:
                     t = uuid.uuid1() # new unique id
                 else:
@@ -160,9 +179,9 @@ class parseVcf:
         plt.savefig("test.pdf")
         '''
         plt.figure()
-        nx.draw_spectral(DAG) # ,labels=labels)
+        nx.draw(DAG)# ,labels=labels)
         plt.gcf()
-        plt.savefig("test2.pdf")
+        plt.savefig("test_new.pdf")
 
     # write function for exporting vcf files
     def parse(self):
