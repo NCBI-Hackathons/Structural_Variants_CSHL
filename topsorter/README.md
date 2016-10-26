@@ -7,7 +7,7 @@
 - At the initial construction step, it splits regions of a chromosome by structural variants and creates a weighted DAG.
 - Then it updates the weights of the edges according to barcodes information (and/or other quality metrics) from the script barcode_profiles.py.
 - Finally Topsorter performs topological sorting of the graph and finds the longest path (the most confident haplotype).
-- Input: Vcf file
+- Input: vcf file
 - Output: PDF files of graphs for each chromosme, longest paths
 - Command: `python topsorter.py $vcf ` 
 
