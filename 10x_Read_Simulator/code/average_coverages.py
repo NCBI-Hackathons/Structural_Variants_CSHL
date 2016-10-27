@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # python 2.7
 
+# CHSL Hackathon
+# Oct 24th, 2016
+
 # USAGE: average_coverages.py data/depth_file.txt > output_file
 
 # DESCRIPTION:
