@@ -21,11 +21,18 @@
 # EXAMPLE OUTPUT:
 # # <chrom>\t<start-stop>\t<avg-1,std_dev-1>\t<avg-2,std_dev-2>...<avg-n,std_dev-n>
 
+from __future__ import division
 import sys
 import csv
 import collections
 import average_coverages as av
+import math
 
+class OrderedDefaultDict(collections.OrderedDict, collections.defaultdict):
+    def __init__(self, default_factory=None, *args, **kwargs):
+        #in python3 you can omit the args to super
+        super(OrderedDefaultDict, self).__init__(*args, **kwargs)
+        self.default_factory = default_factory
 
 def make_bin_region(value, bin_size):
     start_bin = int(value) - (int(value) % bin_size)
@@ -42,17 +49,38 @@ def test_bins(value, start_bin, end_bin):
         print 'ERROR: value {} greater than End bin {}'.format(value, end_bin)
         sys.exit()
 
+def std_dev_pop(count_val, sum_val, sumsquares_val):
+    # standard deviation for a population
+    std_dev = math.sqrt((count_val * sumsquares_val - sum_val * sum_val)/(count_val * (count_val)))
+    return std_dev
+
+def std_dev_sample(count_val, sum_val, sumsquares_val):
+    # standard deviation for a sample
+    std_dev = math.sqrt((count_val * sumsquares_val - sum_val * sum_val)/(count_val * (count_val - 1)))
+    return std_dev
+
+def get_stats_list(counts_list, sums_list, sumsquares_list):
+    # calculates the average and std dev for a list of values
+    values_list = zip(counts_list, sums_list, sumsquares_list)
+    stats_list = [ (total/counts, std_dev_pop(counts, total, sumsquare), counts) for counts, total, sumsquare in values_list]
+    # stats_list = [ (total/counts, std_dev_sample(counts, total, sumsquare)) for counts, total, sumsquare in values_list]
+    return stats_list
+
+
+
 def bin_file_regions(input_file, bin_size):
     # ~~ SETUP ~~~ # 
     # track of bin counts while parsing file
+    # chrom_bins = OrderedDefaultDict(dict)
+    # chrom_bins[position_bin] = {"count" : int, "total_cov" : list, "sumsquare_cov" : list}
     # n, s0
-    chrom_bin_counts = collections.defaultdict(lambda : collections.defaultdict(int))
+    chrom_bin_counts = collections.defaultdict(int)
     # hold the coverage values per bin
     # sum(x), s1
-    chrom_total_coverage = collections.defaultdict(lambda : collections.defaultdict(list))
+    chrom_total_coverage = OrderedDefaultDict(list)
     # hold the sum of squares of coverage for each genome
     # sum(x*x), s2
-    chrom_SS_coverage = collections.defaultdict(lambda : collections.defaultdict(list))
+    chrom_SS_coverage = OrderedDefaultDict(list)
     # ~~~ READ FILE ~~ # 
     with open(input_file) as tsvin:
         tsvin = csv.reader(tsvin, delimiter='\t')
@@ -65,23 +93,24 @@ def bin_file_regions(input_file, bin_size):
             # ~~~ BIN REGION ~~ # 
             # set position bins
             position_start_bin, position_end_bin = make_bin_region(position, bin_size)
-            position_bin = str(position_start_bin) + '-' + str(position_end_bin)
+            position_bin = (chrom, position_start_bin, position_end_bin)
             # ~~~ TABULTATE ~~ # 
+            # chrom_bins[position_bin]["count"] 
             # sanity check - make sure we don't add too many entries to the bin
-            chrom_bin_counts[chrom][position_bin] += 1 
-            if chrom_bin_counts[chrom][position_bin] <= bin_size:
-                if not chrom_total_coverage[chrom][position_bin]:
-                    chrom_total_coverage[chrom][position_bin] = line
+            chrom_bin_counts[position_bin] += 1 
+            if chrom_bin_counts[position_bin] <= bin_size:
+                if not chrom_total_coverage[position_bin]:
+                    chrom_total_coverage[position_bin] = line
                 else :
-                    chrom_total_coverage[chrom][position_bin] = [x + y for x, y in zip(chrom_total_coverage[chrom][position_bin], line)]
-                    # chrom_total_coverage[chrom][position_bin] = [sum(x) for x in zip(*chrom_total_coverage[chrom][position_bin])]
-                if not chrom_SS_coverage[chrom][position_bin]:
-                    chrom_SS_coverage[chrom][position_bin] = ss_line
+                    chrom_total_coverage[position_bin] = [x + y for x, y in zip(chrom_total_coverage[position_bin], line)]
+                if not chrom_SS_coverage[position_bin]:
+                    chrom_SS_coverage[position_bin] = ss_line
                 else :
-                    chrom_SS_coverage[chrom][position_bin] = [x + y for x, y in zip(chrom_SS_coverage[chrom][position_bin], ss_line)]
+                    chrom_SS_coverage[position_bin] = [x + y for x, y in zip(chrom_SS_coverage[position_bin], ss_line)]
             else :
                 print 'ERROR: bin exceeded!'
-                print chrom, position, position_bin, chrom_bin_counts[chrom][position_bin]
+                print 'There might be duplicate entries!'
+                print chrom, position, position_bin #, chrom_bin_counts[position_bin]
                 sys.exit()
             # ~~~~~~ # # ~~~~~~ # # ~~~~~~ #
             # include shifted bin window
@@ -90,21 +119,16 @@ def bin_file_regions(input_file, bin_size):
             # position_halfbin = str(position_starthalf_bin) + '-' + str(position_endhalf_bin)
             # test_bins(position, position_starthalf_bin, position_endhalf_bin)
             # ~~~~~~ # # ~~~~~~ # # ~~~~~~ # 
-            # print chrom, position, position_bin 
-        # ~~~ STATS ~~ # 
         # ~~~ REFORMAT ~~ # 
         # format for printing to stdout; need to keep columns & entries in order !!
-        chrom_output = collections.defaultdict(lambda : collections.defaultdict(list))
-        for chrom in sorted(chrom_total_coverage.keys()):
-            # key = chrom, value = bin:[cov values]
-            print chrom
-            # print chrom_total_coverage[chrom]
-            for position_bin in sorted(chrom_total_coverage[chrom]):
-                print position_bin
-                stats_tup = (chrom_total_coverage[chrom][position_bin], chrom_SS_coverage[chrom][position_bin])
-                print stats_tup 
-                chrom_output[chrom][position_bin].append(stats_tup)
-        # return chrom_total_coverage, chrom_SS_coverage
+        chrom_output = collections.defaultdict(list)
+        for position_bin in chrom_total_coverage.keys():
+            print position_bin
+            stats_list = get_stats_list(counts_list = [chrom_bin_counts[position_bin]] * len(chrom_total_coverage[position_bin]), 
+                sums_list = chrom_total_coverage[position_bin], 
+                sumsquares_list = chrom_SS_coverage[position_bin])
+            print stats_list
+            chrom_output[position_bin].append(stats_list)
         return chrom_output
 
 input_file = sys.argv[1]
