@@ -23,7 +23,7 @@ code/bin_coverages.py data/depth13Genome.depth.summary2_sorted.txt > test_output
 
 Example output
 
-!()[sample_output/avg_cov_byGenome.png]
+![](sample_output/avg_cov_byGenome.png)
 
 # Dependencies
 
