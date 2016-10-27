@@ -94,12 +94,16 @@ def bin_file_regions(input_file, bin_size):
         # ~~~ STATS ~~ # 
         # ~~~ REFORMAT ~~ # 
         # format for printing to stdout; need to keep columns & entries in order !!
-        chrom_output = collections.defaultdict(list)
+        chrom_output = collections.defaultdict(lambda : collections.defaultdict(list))
         for chrom in sorted(chrom_total_coverage.keys()):
-            for position_bin in sorted(chrom_total_coverage[chrom].keys())
-                stats_tup = (chrom_total_coverage[chrom], chrom_SS_coverage[chrom])
-            # print stats_tup 
-            chrom_output[chrom].append(stats_tup)
+            # key = chrom, value = bin:[cov values]
+            print chrom
+            # print chrom_total_coverage[chrom]
+            for position_bin in sorted(chrom_total_coverage[chrom]):
+                print position_bin
+                stats_tup = (chrom_total_coverage[chrom][position_bin], chrom_SS_coverage[chrom][position_bin])
+                print stats_tup 
+                chrom_output[chrom][position_bin].append(stats_tup)
         # return chrom_total_coverage, chrom_SS_coverage
         return chrom_output
 
@@ -109,11 +113,11 @@ bin_size = 1000
 if __name__ == '__main__':
     chrom_output = bin_file_regions(input_file, bin_size)
     # print chrom_output.keys()
-    for chrom in sorted(chrom_output.keys()):
-        chrom_stats = chrom_output[chrom]
-        # print chrom_stats
-        for i in chrom_stats:
-            print [x for x in i]
+    # for chrom in sorted(chrom_output.keys()):
+    #     chrom_stats = chrom_output[chrom]
+    #     # print chrom_stats
+    #     for i in chrom_stats:
+    #         print [x for x in i]
         # print chrom + '\t' + '\t'.join(map(str,chrom_stats))
         # print chrom + '\t' + '\t'.join(map(str,["%s,%s" % (av, sd) for av, sd in chrom_stats]))
     # chrom_total_coverage, chrom_SS_coverage = bin_file_regions(input_file, bin_size)
