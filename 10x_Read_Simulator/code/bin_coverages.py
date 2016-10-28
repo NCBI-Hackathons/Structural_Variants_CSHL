@@ -22,7 +22,7 @@
 # <chrom>\t<position>\t<coverage1>\t<coverage2>...<coverage_n>
 
 # EXAMPLE OUTPUT:
-# # <chrom>\t<start-stop>\t<avg-1,std_dev-1>\t<avg-2,std_dev-2>...<avg-n,std_dev-n>
+# <chrom>\t<start>\t<stop>\t<avg-1, std_dev-1, count-1>\t<avg-2, std_dev-2, count-2>...<avg-n, std_dev-n, count-n>
 
 from __future__ import division
 import sys
@@ -74,8 +74,6 @@ def get_stats_list(counts_list, sums_list, sumsquares_list):
 def bin_file_regions(input_file, bin_size):
     # ~~ SETUP ~~~ # 
     # track of bin counts while parsing file
-    # chrom_bins = OrderedDefaultDict(dict)
-    # chrom_bins[position_bin] = {"count" : int, "total_cov" : list, "sumsquare_cov" : list}
     # n, s0
     chrom_bin_counts = collections.defaultdict(int)
     # hold the coverage values per bin
@@ -84,6 +82,8 @@ def bin_file_regions(input_file, bin_size):
     # hold the sum of squares of coverage for each genome
     # sum(x*x), s2
     chrom_SS_coverage = OrderedDefaultDict(list)
+    #
+    chrom_bin_dict = OrderedDefaultDict(lambda : OrderedDefaultDict(dict))
     # ~~~ READ FILE ~~ # 
     with open(input_file) as tsvin:
         tsvin = csv.reader(tsvin, delimiter='\t')
@@ -98,62 +98,41 @@ def bin_file_regions(input_file, bin_size):
             position_start_bin, position_end_bin = make_bin_region(position, bin_size)
             position_bin = (chrom, position_start_bin, position_end_bin)
             # ~~~ TABULTATE ~~ # 
-            # chrom_bins[position_bin]["count"] 
-            # sanity check - make sure we don't add too many entries to the bin
-            chrom_bin_counts[position_bin] += 1 
-            if chrom_bin_counts[position_bin] <= bin_size:
-                if not chrom_total_coverage[position_bin]:
-                    chrom_total_coverage[position_bin] = line
+            # increment counter
+            if not chrom_bin_dict[position_bin]["count"]:
+                chrom_bin_dict[position_bin]["count"] = 1
+            else :
+                chrom_bin_dict[position_bin]["count"] += 1 
+            # check counter value
+            if chrom_bin_dict[position_bin]["count"] <= bin_size:
+                # calculate totals
+                if not chrom_bin_dict[position_bin]["totals"]:
+                    chrom_bin_dict[position_bin]["totals"] = line
                 else :
-                    chrom_total_coverage[position_bin] = [x + y for x, y in zip(chrom_total_coverage[position_bin], line)]
-                if not chrom_SS_coverage[position_bin]:
-                    chrom_SS_coverage[position_bin] = ss_line
-                else :
-                    chrom_SS_coverage[position_bin] = [x + y for x, y in zip(chrom_SS_coverage[position_bin], ss_line)]
+                    chrom_bin_dict[position_bin]["totals"] = [x + y for x, y in zip(chrom_bin_dict[position_bin]["totals"], line)]
+                # calculate sums of squares
+                if not chrom_bin_dict[position_bin]["sumsquares"]:
+                    chrom_bin_dict[position_bin]["sumsquares"] = ss_line
+                else : 
+                    chrom_bin_dict[position_bin]["sumsquares"] = [x + y for x, y in zip(chrom_bin_dict[position_bin]["sumsquares"], ss_line)]
             else :
                 print 'ERROR: bin exceeded!'
                 print 'There might be duplicate entries!'
                 print chrom, position, position_bin #, chrom_bin_counts[position_bin]
                 sys.exit()
-            # ~~~~~~ # # ~~~~~~ # # ~~~~~~ #
-            # include shifted bin window
-            # position_starthalf_bin = int(position) - (int(position) % bin_size) - (bin_size / 2)
-            # position_endhalf_bin = position_starthalf_bin + bin_size
-            # position_halfbin = str(position_starthalf_bin) + '-' + str(position_endhalf_bin)
-            # test_bins(position, position_starthalf_bin, position_endhalf_bin)
-            # ~~~~~~ # # ~~~~~~ # # ~~~~~~ # 
-        # ~~~ REFORMAT ~~ # 
-        # format for printing to stdout; need to keep columns & entries in order !!
-        chrom_output = collections.defaultdict(list)
-        for position_bin in chrom_total_coverage.keys():
-            print position_bin
-            stats_list = get_stats_list(counts_list = [chrom_bin_counts[position_bin]] * len(chrom_total_coverage[position_bin]), 
-                sums_list = chrom_total_coverage[position_bin], 
-                sumsquares_list = chrom_SS_coverage[position_bin])
-            print stats_list
-            chrom_output[position_bin].append(stats_list)
-        return chrom_output
+        # calculate avg and std dev
+        for position_bin in chrom_bin_dict.keys():
+            stats_list = get_stats_list(counts_list = [chrom_bin_dict[position_bin]["count"]] * len(chrom_bin_dict[position_bin]["totals"]), 
+                sums_list = chrom_bin_dict[position_bin]["totals"], 
+                sumsquares_list = chrom_bin_dict[position_bin]["sumsquares"])
+            chrom_bin_dict[position_bin]["stats"] = stats_list
+        return chrom_bin_dict
 
 input_file = sys.argv[1]
 bin_size = 1000
 
 if __name__ == '__main__':
     chrom_output = bin_file_regions(input_file, bin_size)
-    # print chrom_output.keys()
-    # for chrom in sorted(chrom_output.keys()):
-    #     chrom_stats = chrom_output[chrom]
-    #     # print chrom_stats
-    #     for i in chrom_stats:
-    #         print [x for x in i]
-        # print chrom + '\t' + '\t'.join(map(str,chrom_stats))
-        # print chrom + '\t' + '\t'.join(map(str,["%s,%s" % (av, sd) for av, sd in chrom_stats]))
-    # chrom_total_coverage, chrom_SS_coverage = bin_file_regions(input_file, bin_size)
-    # for chrom, statsdict in chrom_total_coverage.iteritems():
-    #     for region, values in statsdict.iteritems():
-    #         print chrom + '\t' + '\t'.join(map(str,region.split('-'))) + '\t'.join(map(str,values))
-    #         # print chrom + '\t' + '\t'.join(map(str,["%s,%s" % (av, sd) for av, sd in chrom_stats]))
-    # print ''
-    # print ''
-    # for chrom, statsdict in chrom_SS_coverage.iteritems():
-    #     for region, values in statsdict.iteritems():
-    #         print chrom + '\t' + '\t'.join(map(str,region.split('-'))) + '\t'.join(map(str,values))
+    for position_bin in sorted(chrom_output.keys()):
+        # chr start stop avg,sd,count
+        print '\t'.join(map(str,position_bin)) + '\t'.join(map(str,["%s,%s,%s" % (avg, sd, count) for avg, sd, count in chrom_output[position_bin]["stats"]]))
