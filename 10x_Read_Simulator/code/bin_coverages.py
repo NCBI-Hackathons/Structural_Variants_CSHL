@@ -135,4 +135,4 @@ if __name__ == '__main__':
     chrom_output = bin_file_regions(input_file, bin_size)
     for position_bin in sorted(chrom_output.keys()):
         # chr start stop avg,sd,count
-        print '\t'.join(map(str,position_bin)) + '\t'.join(map(str,["%s,%s,%s" % (avg, sd, count) for avg, sd, count in chrom_output[position_bin]["stats"]]))
+        print '\t'.join(map(str,position_bin)) + '\t' + '\t'.join(map(str,["%s,%s,%s" % (avg, sd, count) for avg, sd, count in chrom_output[position_bin]["stats"]]))
