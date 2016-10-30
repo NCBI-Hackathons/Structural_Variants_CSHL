@@ -41,7 +41,13 @@ sample_names <- c("HG00512"
 colnames(coverage_df)[-1] <- sample_names
 
 
-
+# chrom_vec <- dput(scan("hg38_chrom_list.txt",what = ""))
+# chrom_vec <- c("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8",
+# "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15",
+# "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22",
+# "chrX", "chrY")
+# chrom_vec <- factor(chrom_vec, levels = chrom_vec)
+# print(chrom_vec)
 chrom_vec <- c("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX", "chrY")
 multi_grep <- function(source_data, patterns){
     # find multiple patterns in a char vector
