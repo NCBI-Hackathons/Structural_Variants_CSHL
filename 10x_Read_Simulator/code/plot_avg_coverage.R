@@ -21,6 +21,7 @@ outdir <- args[2]
 
 # read in the file
 coverage_df <- read.table(cov_file)
+save.image(file=file.path(outdir, "plot_avg_start.Rdata"),compress = TRUE)
 
 # fix colnames
 colnames(coverage_df)[1] <- "chrom"
@@ -34,7 +35,7 @@ coverage_df <- reshape2::melt(coverage_df, id.vars = "chrom", value.name = "cove
 stat_strings <- strsplit(as.character(coverage_df$coverage), ',')
 
 stats_df <- data.frame(matrix(as.numeric(unlist(stat_strings)), nrow=length(stat_strings), byrow=T))
-colnames(stats_df) <- c("average", "std_dev")
+colnames(stats_df) <- c("average", "std_dev", "count")
 
 coverage_df <- cbind(coverage_df[c("chrom", "sample")], stats_df)
 # colnames(stats_df) <- c("chrom", "sample", "average", "std_dev")
@@ -42,23 +43,41 @@ coverage_df <- cbind(coverage_df[c("chrom", "sample")], stats_df)
 # melt again
 coverage_df <- reshape2::melt(coverage_df, id.vars = c("chrom","sample"), value.name = "coverage", variable.name = "statistic")
 
+
 # fix chrom order for plot
-coverage_df <- coverage_df[with(coverage_df, order(chrom)), ]
+# coverage_df <- coverage_df[with(coverage_df, order(chrom)), ]
 
 
 # plot by genome
+# horizontal barplot per genome
 coverage_df_avg <- subset(coverage_df, statistic == "average")
-pdf(file = file.path(outdir, "avg_cov_byGenome.pdf"), height = 8, width = 8)
+# pdf(file = file.path(outdir, "avg_cov_byGenome.pdf"), height = 8, width = 8)
 chrom_plot <- ggplot(coverage_df_avg, aes(x = sample, y = coverage, fill = factor(chrom)))
 chrom_plot <-chrom_plot + geom_bar(stat="identity", position="dodge")
 chrom_plot <-chrom_plot + coord_flip()
 chrom_plot <-chrom_plot + labs(title="Average Coverage Per Chromosome\nPer Samples", x="Sample", y = "Average Coverage", fill="Chromosome")
 print(chrom_plot)
-dev.off()
+# dev.off()
+quit()
+# ribbon plot
+coverage_df_avg <- subset(coverage_df, statistic == "average" | statistic == "std_dev")
+# coverage_sample_df <- subset(coverage_df, sample == unique(as.character(coverage_df[["sample"]]))[1] & statistic == "average")
+chrom_ribbon <- ggplot(coverage_df_avg)
+chrom_ribbon <- chrom_ribbon + geom_line(aes(x = chrom, y = coverage, group = sample))
+
+# coverage_sample_df2 <- dcast(coverage_df, chrom + sample ~ statistic, value.var = "coverage")
+# coverage_sample_df2 <- subset(coverage_sample_df2, sample == unique(as.character(coverage_df[["sample"]]))[1])
+
+chrom_ribbon + geom_ribbon(aes(x = chrom, ymin=coverage_sample_df2[['average']], ymax=coverage_sample_df2[['std_dev']]), fill="lightpink3", color="lightpink3")
+# chrom_ribbon <- chrom_ribbon + geom_ribbon(aes(ymin=0, ymax=o3run), fill="lightpink3", color="lightpink3")
+print(chrom_ribbon)
 
 
-save.image(file=file.path(outdir, "plot_avg.Rdata"),compress = TRUE)
+# save.image(file=file.path(outdir, "plot_avg.Rdata"),compress = TRUE)
 # load("plot_avg.Rdata")
+print(coverage_sample_df)
+quit()
+
 
 # plotly
 chrom_plotly <- ggplotly(chrom_plot)
