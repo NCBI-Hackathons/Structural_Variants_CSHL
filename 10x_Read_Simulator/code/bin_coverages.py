@@ -75,13 +75,13 @@ def bin_file_regions(input_file, bin_size):
     # ~~ SETUP ~~~ # 
     # track of bin counts while parsing file
     # n, s0
-    chrom_bin_counts = collections.defaultdict(int)
+    # chrom_bin_counts = collections.defaultdict(int)
     # hold the coverage values per bin
     # sum(x), s1
-    chrom_total_coverage = OrderedDefaultDict(list)
+    # chrom_total_coverage = OrderedDefaultDict(list)
     # hold the sum of squares of coverage for each genome
     # sum(x*x), s2
-    chrom_SS_coverage = OrderedDefaultDict(list)
+    # chrom_SS_coverage = OrderedDefaultDict(list)
     #
     chrom_bin_dict = OrderedDefaultDict(lambda : OrderedDefaultDict(dict))
     # ~~~ READ FILE ~~ # 
@@ -133,6 +133,6 @@ bin_size = 1000
 
 if __name__ == '__main__':
     chrom_output = bin_file_regions(input_file, bin_size)
-    for position_bin in sorted(chrom_output.keys()):
+    for position_bin in chrom_output.iterkeys():
         # chr start stop avg,sd,count
         print '\t'.join(map(str,position_bin)) + '\t' + '\t'.join(map(str,["%s,%s,%s" % (avg, sd, count) for avg, sd, count in chrom_output[position_bin]["stats"]]))

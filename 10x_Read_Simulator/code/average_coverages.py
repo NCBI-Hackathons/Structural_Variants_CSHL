@@ -37,6 +37,13 @@ import math
 
 input_file = sys.argv[1]
 
+class OrderedDefaultDict(collections.OrderedDict, collections.defaultdict):
+    def __init__(self, default_factory=None, *args, **kwargs):
+        #in python3 you can omit the args to super
+        super(OrderedDefaultDict, self).__init__(*args, **kwargs)
+        self.default_factory = default_factory
+
+
 def get_num_cols(infile):
     # get the number of columns in the file
     with open(infile) as file:
@@ -45,33 +52,31 @@ def get_num_cols(infile):
         num_cols = len(first_row)
     return num_cols
 
+def std_dev_pop(count_val, sum_val, sumsquares_val):
+    # standard deviation for a population
+    std_dev = math.sqrt((count_val * sumsquares_val - sum_val * sum_val)/(count_val * (count_val)))
+    return std_dev
+
+def std_dev_sample(count_val, sum_val, sumsquares_val):
+    # standard deviation for a sample
+    std_dev = math.sqrt((count_val * sumsquares_val - sum_val * sum_val)/(count_val * (count_val - 1)))
+    return std_dev
+
+def get_stats_list(counts_list, sums_list, sumsquares_list):
+    # calculates the average and std dev for a list of values
+    values_list = zip(counts_list, sums_list, sumsquares_list)
+    stats_list = [ (total/counts, std_dev_pop(counts, total, sumsquare), counts) for counts, total, sumsquare in values_list]
+    # stats_list = [ (total/counts, std_dev_sample(counts, total, sumsquare)) for counts, total, sumsquare in values_list]
+    return stats_list
+
 def genome_coverage_stats(infile):
     # get average coverage per chromosome per genome
     # EXAMPLE:
     # {genome1: {chr1: 10000, chr2:5000}, genome2:etc.}
     # ~~~~~ # 
     # ~~ SETUP ~~~ # 
-    # get the number of genomes in the file
-    num_genomes = get_num_cols(infile) - 2
-    # dict to hold total number entries for each genome
-    # n, s0
-    genome_counts = collections.defaultdict(dict)
-    # dict to hold total coverage for each genome
-    # sum(x), s1
-    genome_coverages = collections.defaultdict(dict)
-    # dict to hold the sum of squares of coverage for each genome
-    # sum(x*x), s2
-    genome_SS_coverages = collections.defaultdict(dict)
-    # dict to hold average coverage for each genome
-    genome_average_coverages = collections.defaultdict(dict)
-    # dict to hold the std dev of coverage for each genome
-    genome_std_coverages = collections.defaultdict(dict)
-    # initialize defaultdict for every genome in the file
-    for i in range(1, num_genomes + 1):
-        genome_coverages[i] = collections.defaultdict(int)
-        genome_counts[i] = collections.defaultdict(int)
-        genome_average_coverages[i] = collections.defaultdict(int)
-        genome_SS_coverages[i] = collections.defaultdict(int)
+    # dict to hold the calculated values
+    genome_bin_dict = OrderedDefaultDict(lambda : OrderedDefaultDict(dict))
     # ~~~ READ FILE ~~ # 
     # calculate the total & SS coverages 
     with open(infile) as tsvin:
@@ -79,40 +84,35 @@ def genome_coverage_stats(infile):
         for line in tsvin:
             chrom = line.pop(0)
             position = line.pop(0)
-            for i in range(1, len(line) + 1):
-                genome_counts[i][chrom] += 1
-                genome_coverages[i][chrom] += int(line[i - 1])
-                genome_SS_coverages[i][chrom] += int(line[i - 1]) * int(line[i - 1])
+            # set dict values
+            # convert remaining values to int
+            line = map(int, line)
+            # calc sums of squares
+            ss_line = [x * x for x in line]
+            # count occurences per chrom
+            if not genome_bin_dict[chrom]['counts']:
+                genome_bin_dict[chrom]['counts'] = [ item for item in [1] for i in range(len(line))]
+            else : 
+                genome_bin_dict[chrom]['counts'] = [ item + 1 for item in genome_bin_dict[chrom]['counts']]
+            # sum coverages
+            if not genome_bin_dict[chrom]['coverages']:
+                genome_bin_dict[chrom]['coverages'] = line
+            else : 
+                genome_bin_dict[chrom]['coverages'] = [ x + y for x, y in zip(genome_bin_dict[chrom]['coverages'], line)]
+            # sums of squres
+            if not genome_bin_dict[chrom]['sumsquares']:
+                genome_bin_dict[chrom]['sumsquares'] = ss_line
+            else : 
+                genome_bin_dict[chrom]['sumsquares'] = [x + y for x, y in zip(genome_bin_dict[chrom]['sumsquares'], ss_line)]
     # ~~~ STATS ~~ # 
     # calculate the averages & std dev
-    for genome in genome_counts.iterkeys():
-        for chrom in genome_counts[genome].iterkeys():
-            s0 = genome_counts[genome][chrom]
-            s1 = genome_coverages[genome][chrom]
-            s2 = genome_SS_coverages[genome][chrom]
-            # average
-            genome_average_coverages[genome][chrom] = s1 / s0
-            # std dev; watch for count of 1 = divide by zero
-            if (s0 <= 1):
-                genome_std_coverages[genome][chrom] = 0
-            else :
-                # sample std:
-                # genome_std_coverages[genome][chrom] = math.sqrt((s0 * s2 - s1 * s1)/(s0 * (s0 - 1)))
-                # population std:
-                genome_std_coverages[genome][chrom] = math.sqrt((s0 * s2 - s1 * s1)/(s0 * (s0)))
-    # ~~~ REFORMAT ~~ # 
-    # format for printing to stdout; need to keep columns & entries in order !!
-    chrom_output = collections.defaultdict(list)
-    for genome in sorted(genome_average_coverages.keys()):
-        for chrom in sorted(genome_average_coverages[genome].keys()):
-            stats_tup = (genome_average_coverages[genome][chrom], genome_std_coverages[genome][chrom])
-            chrom_output[chrom].append(stats_tup)
-    return chrom_output
+    for chrom in genome_bin_dict.iterkeys():
+        genome_bin_dict[chrom]['stats'] = get_stats_list(counts_list = genome_bin_dict[chrom]['counts'], sums_list = genome_bin_dict[chrom]['coverages'], sumsquares_list = genome_bin_dict[chrom]['sumsquares'])
+    return genome_bin_dict
 
 if __name__ == '__main__':
     chrom_output = genome_coverage_stats(input_file)
-    for chrom in sorted(chrom_output.keys()):
-        chrom_stats = chrom_output[chrom]
-        # print chrom + '\t' + '\t'.join(map(str,chrom_stats))
-        print chrom + '\t' + '\t'.join(map(str,["%s,%s" % (av, sd) for av, sd in chrom_stats]))
+    for chrom in chrom_output.iterkeys():
+        # chr avg,sd,count
+        print chrom + '\t' + '\t'.join(map(str,["%s,%s,%s" % (avg, sd, count) for avg, sd, count in chrom_output[chrom]["stats"]]))
 
