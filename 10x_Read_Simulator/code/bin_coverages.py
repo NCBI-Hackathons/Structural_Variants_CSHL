@@ -26,6 +26,7 @@
 
 from __future__ import division
 import sys
+import gzip
 import csv
 import collections
 import average_coverages as av
@@ -85,9 +86,14 @@ def bin_file_regions(input_file, bin_size):
     #
     chrom_bin_dict = OrderedDefaultDict(lambda : OrderedDefaultDict(dict))
     # ~~~ READ FILE ~~ # 
-    with open(input_file) as tsvin:
-        tsvin = csv.reader(tsvin, delimiter='\t')
-        for line in tsvin:
+    # read tsv.gzip file
+    with gzip.open(input_file,'r') as fin:
+        reader = csv.reader(fin, delimiter='\t')
+        for line in reader:
+        # read tsv file
+        # with open(input_file) as tsvin:
+        # tsvin = csv.reader(tsvin, delimiter='\t')
+        # for line in tsvin:
             chrom = line.pop(0)
             position = line.pop(0)
             # convert remaining values to int
