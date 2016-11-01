@@ -6,7 +6,7 @@
 ## DESCRIPTION: This script will ouput a subset of rows from a depth file 
 ## for use as a summary data set
 
-input_file="$1" # depth coverage file .gz & tbi
+input_file="$1" # depth coverage file .gz (needs .tbi present)
 chrom_list="$2" # list of chrom's to use
 nrows="$3" # number of rows to save
 
