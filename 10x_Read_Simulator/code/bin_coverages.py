@@ -135,7 +135,7 @@ def bin_file_regions(input_file, bin_size):
         return chrom_bin_dict
 
 input_file = sys.argv[1]
-bin_size = 1000
+bin_size = 1000000
 
 if __name__ == '__main__':
     chrom_output = bin_file_regions(input_file, bin_size)

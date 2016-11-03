@@ -12,10 +12,12 @@ library("ggplot2")
 library("plotly")
 
 # get commands passed to the script
-# args <- commandArgs(TRUE)
-
-cov_file <- "/home/devsci4/Structural_Variants_CSHL/10x_Read_Simulator/test_output/depth13Genome.depth.averages.txt"
-outdir <- "/home/devsci4/Structural_Variants_CSHL/10x_Read_Simulator/test_output/"
+# get commands passed to the script
+args <- commandArgs(TRUE)
+cov_file <- args[1]
+outdir <- args[2]
+# cov_file <- "/home/devsci4/Structural_Variants_CSHL/10x_Read_Simulator/test_output/depth13Genome.depth.averages.txt"
+# outdir <- "/home/devsci4/Structural_Variants_CSHL/10x_Read_Simulator/test_output/"
 # > load("/home/devsci4/Structural_Variants_CSHL/10x_Read_Simulator/test_output/plot_avg-manual.Rdata")
 
 # read in the file
@@ -39,7 +41,6 @@ sample_names <- c("HG00512"
 , "NA24385"
 , "NA12878")
 colnames(coverage_df)[-1] <- sample_names
-
 
 # chrom_vec <- dput(scan("hg38_chrom_list.txt",what = ""))
 # chrom_vec <- c("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8",
@@ -65,6 +66,7 @@ multi_grep <- function(source_data, patterns){
     return(matches)
 }
 
+# get only the desired chrom's
 new_df <- data.frame()
 for(chrmatch in multi_grep(chrom_vec, coverage_df[["chrom"]])){
 # print(chrmatch)
@@ -84,13 +86,24 @@ coverage_df <- reshape2::melt(coverage_df, id.vars = "chrom", value.name = "cove
 
 
 # fix chrom order for plot
-coverage_df <- coverage_df[with(coverage_df, order(chrom)), ]
+# coverage_df <- coverage_df[with(coverage_df, order(chrom)), ]
+
+# peel off the coverage stats column and turn into a grouping factor
+stat_strings <- strsplit(as.character(coverage_df$coverage), ',')
+
+stats_df <- data.frame(matrix(as.numeric(unlist(stat_strings)), nrow=length(stat_strings), byrow=T))
+colnames(stats_df) <- c("average", "std_dev", "count")
+
+coverage_df <- cbind(coverage_df[c("chrom", "sample")], stats_df)
+
+# print(head(coverage_df))
+# quit()
 
 
 # plot by genome
 # coverage_df_avg <- subset(coverage_df, statistic == "average")
 pdf(file = file.path(outdir, "avg_cov_byGenome-manual.pdf"), height = 8, width = 8)
-chrom_plot <- ggplot(coverage_df, aes(x = sample, y = coverage, fill = factor(chrom)))
+chrom_plot <- ggplot(coverage_df, aes(x = sample, y = average, fill = factor(chrom)))
 chrom_plot <-chrom_plot + geom_bar(stat="identity", position="dodge")
 chrom_plot <-chrom_plot + coord_flip()
 # chrom_plot <-chrom_plot + scale_x_discrete(limits = rev(levels(coverage_df[["chrom"]])))
@@ -103,8 +116,8 @@ save.image(file=file.path(outdir, "plot_avg-manual.Rdata"),compress = TRUE)
 # load("/home/devsci4/Structural_Variants_CSHL/10x_Read_Simulator/test_output/plot_avg-manual.Rdata")
 
 # plotly
-chrom_plotly <- ggplotly(chrom_plot)
-htmlwidgets::saveWidget(as.widget(chrom_plotly), file.path(outdir, "avg_cov_byGenome-manual.html"))
+# chrom_plotly <- ggplotly(chrom_plot)
+# htmlwidgets::saveWidget(as.widget(chrom_plotly), file.path(outdir, "avg_cov_byGenome-manual.html"))
 
 
 # coverage_df
